@@ -9,12 +9,13 @@ const firebaseConfig = {
 };
 // ===============================================
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getFirestore, collection, addDoc, getDocs, query, orderBy, doc, getDoc,
   serverTimestamp, runTransaction, updateDoc, increment,
-  collectionGroup, limit
+  collectionGroup, limit,
+  setDoc, deleteDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
 import {
   getAuth, signInAnonymously, onAuthStateChanged,
   GoogleAuthProvider, signInWithPopup, linkWithPopup
@@ -229,6 +230,29 @@ export async function addAnswer(qid, payload){
   }catch(e){
     console.warn("notify(answer) failed", e);
   }
+  // 通知：保存（ウォッチ）してる人へ
+try{
+  const qSnap2 = await getDoc(doc(db,"questions",qid));
+  const q2 = qSnap2.data() || {};
+  const watchers = await listWatchersUids(qid, 500);
+
+  for(const uid of watchers){
+    // 自分（回答者）には送らない
+    if(uid === currentUid) continue;
+    // 質問者にはすでに「回答通知」が飛ぶので二重送信を避ける
+    if(q2.ownerUid && uid === q2.ownerUid) continue;
+
+    await createNotification(uid, {
+      type: "watch_answer",
+      qid,
+      aid: res.id,
+      message: "保存した質問に新しい回答がつきました"
+    });
+  }
+}catch(e){
+  console.warn("notify(watchers) failed", e);
+}
+
 
   return res;
 }
@@ -458,3 +482,40 @@ export async function getLeaderboardSample(sampleSize = 500){
   snap.forEach(d=>out.push({id:d.id, data:d.data(), path:d.ref.path}));
   return out;
 }
+// ===== 保存（ウォッチ） =====
+// 保存先：questions/{qid}/watchers/{uid}
+
+export async function isWatching(qid){
+  await ensureAnonAuth();
+  const ref = doc(db, "questions", qid, "watchers", currentUid);
+  const snap = await getDoc(ref);
+  return snap.exists();
+}
+
+export async function toggleWatchQuestion(qid){
+  await ensureAnonAuth();
+  const ref = doc(db, "questions", qid, "watchers", currentUid);
+  const snap = await getDoc(ref);
+
+  if(snap.exists()){
+    await deleteDoc(ref);
+    return { watching:false };
+  }else{
+    await setDoc(ref, {
+      ownerUid: currentUid,       // ルールで使えるように念のため入れる
+      createdAt: serverTimestamp()
+    });
+    return { watching:true };
+  }
+}
+
+// ウォッチしてる人一覧（内部用）
+export async function listWatchersUids(qid, limitN = 500){
+  await ensureAnonAuth();
+  const qy = query(collection(db, "questions", qid, "watchers"), limit(limitN));
+  const snap = await getDocs(qy);
+  const uids = [];
+  snap.forEach(d => uids.push(d.id)); // docId = uid
+  return uids;
+}
+

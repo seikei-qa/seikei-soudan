@@ -2,514 +2,657 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>質問詳細 | 整形相談室</title>
-  <link rel="stylesheet" href="style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>質問詳細</title>
+  <link rel="stylesheet" href="./style.css">
+  <style>
+    /* もしstyle.cssに無い場合の最低限 */
+    .wrap{max-width:980px;margin:0 auto;padding:16px;}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .right{margin-left:auto}
+    .card{background:#fff;border:1px solid #e6e8ef;border-radius:12px;padding:12px;box-shadow:0 1px 0 rgba(0,0,0,.03)}
+    .muted{color:#666}
+    .danger{color:#b00020}
+    .btn{border:1px solid #cfd5e5;background:#fff;border-radius:10px;padding:8px 10px;cursor:pointer}
+    .btn.primary{background:#111;color:#fff;border-color:#111}
+    .btn.ghost{background:#fff}
+    textarea,input{width:100%;box-sizing:border-box;border:1px solid #cfd5e5;border-radius:10px;padding:10px}
+    textarea{min-height:110px}
+    .pill{display:inline-block;font-size:12px;border:1px solid #e6e8ef;border-radius:999px;padding:2px 8px}
+    .ans{margin-top:12px}
+    .ansHead{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .ansBody{margin-top:8px;white-space:pre-wrap}
+    .reply{margin-top:10px;padding-left:12px;border-left:2px solid #eee}
+    .small{font-size:12px}
+    .sep{height:1px;background:#e6e8ef;margin:12px 0}
+  </style>
 </head>
+
 <body>
-<header>
   <div class="wrap">
-    <h1>質問詳細</h1>
-    <nav>
-      <a href="index.html">一覧</a>
-      <a href="ask.html">質問する</a>
-      <a href="rank.html">ランキング</a>
-    </nav>
-  </div>
-</header>
 
-<main>
-  <div id="maintBox" class="card" style="display:none">
-    <div class="notice">
-      <b>メンテナンス中：</b><span id="maintMsg"></span><br>
-      現在「投稿」は停止中です（閲覧は可能）。
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="row" style="justify-content:space-between">
-      <div id="status" class="muted">読み込み中…</div>
-      <button id="loginBtn" class="btn ghost" style="width:auto">Googleでログイン（任意）</button>
+    <div class="row" style="margin-bottom:12px">
+      <a class="btn ghost" href="index.html">← 一覧へ</a>
+      <a class="btn ghost" href="rank.html">🏆 ランキング</a>
+      <span class="right muted small" id="uidInfo"></span>
     </div>
 
-    <h2 id="title" style="margin:10px 0 0"></h2>
-
-    <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap">
-      <span class="badge" id="cat"></span>
-      <span class="badge" id="reg"></span>
-      <span class="badge" id="who"></span>
-      <span class="badge" id="counts"></span>
+    <!-- メンテ表示 -->
+    <div id="maintBox" class="card" style="display:none;border-color:#ffd1d1;background:#fff5f5;margin-bottom:12px">
+      <b class="danger">メンテナンス中</b>
+      <div id="maintMsg" class="muted" style="margin-top:6px"></div>
     </div>
 
-    <div id="tags" style="margin-top:10px"></div>
-    <div id="body" style="margin-top:12px;white-space:pre-wrap"></div>
+    <!-- 質問 -->
+    <div class="card" id="qBox">
+      <div class="row">
+        <div>
+          <div class="muted small">質問</div>
+          <h2 id="qTitle" style="margin:6px 0 0 0"></h2>
+        </div>
+        <div class="right row">
+          <button id="copyBtn" class="btn ghost" style="width:auto">URLコピー</button>
 
-    <div class="inline-actions">
-      <button id="copyUrl" class="btn ghost" style="width:auto">URLコピー</button>
-      <button id="likeBtn" class="btn" style="width:auto">共感</button>
-      <button id="reportQ" class="btn danger" style="width:auto">通報</button>
-    </div>
+          <!-- ★保存（ウォッチ） -->
+          <button id="watchBtn" class="btn ghost" style="width:auto">☆ 保存</button>
 
-    <div id="ownerActions" style="display:none;margin-top:12px">
-      <hr>
-      <h3 style="margin:0 0 8px">自分の質問を編集/削除</h3>
-      <label>タイトル</label>
-      <input id="eTitle">
-      <label>本文</label>
-      <textarea id="eBody"></textarea>
-      <div class="row" style="margin-top:10px">
-        <button id="saveQ" class="btn" style="width:auto">保存</button>
-        <button id="delQ" class="btn danger" style="width:auto">削除（ソフト削除）</button>
-        <div id="qMsg" class="muted"></div>
+          <!-- 共感 -->
+          <button id="likeBtn" class="btn ghost" style="width:auto">共感</button>
+
+          <!-- 任意ログイン -->
+          <button id="loginBtn" class="btn ghost" style="width:auto">Googleでログイン（任意）</button>
+        </div>
+      </div>
+
+      <div id="qMeta" class="muted small" style="margin-top:6px"></div>
+      <div id="watchMsg" class="muted small" style="margin-top:6px"></div>
+
+      <div id="qBody" style="margin-top:10px;white-space:pre-wrap"></div>
+
+      <div class="sep"></div>
+
+      <!-- 質問者のみ：編集/削除 -->
+      <div id="qOwnerTools" class="row" style="display:none">
+        <button id="qEditBtn" class="btn ghost" style="width:auto">質問を編集</button>
+        <button id="qDeleteBtn" class="btn ghost danger" style="width:auto">質問を削除</button>
+      </div>
+
+      <!-- 質問編集（質問者のみ） -->
+      <div id="qEditBox" style="display:none;margin-top:12px">
+        <div class="muted small">タイトル</div>
+        <input id="qEditTitle" type="text" />
+        <div class="muted small" style="margin-top:8px">本文</div>
+        <textarea id="qEditBody"></textarea>
+        <div class="row" style="margin-top:8px">
+          <button id="qEditSaveBtn" class="btn primary" style="width:auto">保存</button>
+          <button id="qEditCancelBtn" class="btn ghost" style="width:auto">キャンセル</button>
+        </div>
+        <div id="qEditWarn" class="danger small" style="margin-top:6px"></div>
       </div>
     </div>
-  </div>
 
-  <div class="card">
-    <h3 style="margin:0 0 10px">回答する</h3>
+    <div class="sep"></div>
 
-    <label>表示名（任意）</label>
-    <input id="aName" placeholder="例：経験者 / 匿名">
-
-    <label>SNS（任意）</label>
-    <input id="aSocial" placeholder="例：X @xxxx / 空欄OK">
-
-    <label>回答本文（必須）</label>
-    <textarea id="aBody" placeholder="経験談・注意点など。断定や誹謗中傷は避けてください。"></textarea>
-
-    <div class="row" style="margin-top:10px">
-      <button id="aBtn" class="btn" style="width:auto">回答を投稿</button>
-      <div id="aStatus" class="muted"></div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="row" style="justify-content:space-between">
-      <h3 style="margin:0">回答一覧</h3>
-      <select id="ansSort" style="width:auto">
-        <option value="best" selected>ベスト優先 → 参考が多い順</option>
-        <option value="help">参考になったが多い順</option>
-        <option value="old">古い順</option>
-      </select>
+    <!-- 回答投稿 -->
+    <div class="card">
+      <div class="row">
+        <b>回答する</b>
+        <span class="muted small">（ログイン不要）</span>
+      </div>
+      <textarea id="answerText" placeholder="できるだけ具体的に。経験談や根拠があると強いです。"></textarea>
+      <div class="row" style="margin-top:8px">
+        <button id="answerBtn" class="btn primary" style="width:auto">回答を投稿</button>
+        <span id="dangerWarn" class="danger small"></span>
+      </div>
     </div>
 
-    <div id="answers"></div>
+    <div class="sep"></div>
+
+    <!-- 回答一覧 -->
+    <div class="card">
+      <div class="row">
+        <b>回答一覧</b>
+        <span id="ansCount" class="muted small"></span>
+      </div>
+      <div id="answersBox" style="margin-top:10px">読み込み中…</div>
+    </div>
+
   </div>
-</main>
 
-<script type="module">
-  import {
-    ensureAnonAuth, currentUid, currentUser,
-    esc, containsDanger,
-    getQuestion, listAnswers, addAnswer,
-    toggleLikeQuestion, isLiked,
-    toggleHelpful, isHelpful,
-    updateQuestion, softDeleteQuestion,
-    updateAnswer, softDeleteAnswer,
-    createReport, copyToClipboard,
-    getSiteConfig,
-    setBestAnswer, setThanks,
-    listReplies, addReply, updateReply, softDeleteReply,
-    optionalGoogleLogin
-  } from "./app.js";
+  <script type="module">
+    import {
+      ensureAnonAuth, optionalGoogleLogin, getSiteConfig,
+      esc, containsDanger, copyToClipboard,
+      getQuestion, updateQuestion, softDeleteQuestion,
+      listAnswers, addAnswer, updateAnswer, softDeleteAnswer,
+      setBestAnswer, setThanks,
+      listReplies, addReply, updateReply, softDeleteReply,
+      toggleHelpful, isHelpful,
+      toggleLikeQuestion, isLiked,
+      isWatching, toggleWatchQuestion,
+      createReport,
+      currentUid
+    } from "./app.js";
 
-  const params = new URLSearchParams(location.search);
-  const id = params.get("id");
+    const $ = (id)=>document.getElementById(id);
 
-  let qData = null;
-  let answersCache = [];
-  let maintenance = false;
-  let isOwner = false;
-
-  function siteUrl(){ return location.href; }
-
-  function renderTags(tags){
-    const el = document.getElementById("tags");
-    el.innerHTML = (tags||[]).map(t=>`<span class="pill tag" data-tag="${esc(t)}">#${esc(t)}</span>`).join("");
-  }
-
-  function sortAnswers(list, mode){
-    const cp = list.slice().filter(a => !a.data?.deleted);
-    if(mode==="old") return cp;
-    if(mode==="help") return cp.sort((a,b)=> (b.data.helpfulCount||0) - (a.data.helpfulCount||0));
-    // best: ベストを先頭、その後helpful desc
-    return cp.sort((a,b)=>{
-      const ab = a.data.best ? 1 : 0;
-      const bb = b.data.best ? 1 : 0;
-      if(bb !== ab) return bb - ab;
-      return (b.data.helpfulCount||0) - (a.data.helpfulCount||0);
-    });
-  }
-
-  async function renderReplies(qid, aid){
-    const reps = (await listReplies(qid, aid)).filter(r=>!r.data.deleted);
-    if(!reps.length) return `<div class="muted" style="margin-top:8px">返信はまだありません。</div>`;
-
-    return reps.map(r=>{
-      const d=r.data;
-      const mine = (d.ownerUid && currentUid && d.ownerUid === currentUid);
-      return `
-        <div class="card" style="margin:10px 0 0; padding:12px">
-          <div class="row" style="justify-content:space-between">
-            <div><b>${esc(d.displayName||"匿名")}</b> ${d.social?`<small>（${esc(d.social)}）</small>`:""}</div>
-            ${mine ? `<button class="btn danger softDelReply" data-aid="${aid}" data-rid="${r.id}" style="width:auto">削除</button>` : ``}
-          </div>
-          <div style="white-space:pre-wrap;margin-top:6px">${esc(d.body||"")}</div>
-          ${mine ? `
-            <div style="margin-top:8px">
-              <textarea class="editReplyText" data-aid="${aid}" data-rid="${r.id}" style="min-height:80px">${esc(d.body||"")}</textarea>
-              <div class="row" style="margin-top:6px">
-                <button class="btn ghost saveReply" data-aid="${aid}" data-rid="${r.id}" style="width:auto">編集保存</button>
-              </div>
-            </div>
-          ` : ``}
-        </div>
-      `;
-    }).join("");
-  }
-
-  async function renderAnswers(){
-    const mode = document.getElementById("ansSort").value;
-    const list = sortAnswers(answersCache, mode);
-
-    const el = document.getElementById("answers");
-    if(!list.length){
-      el.innerHTML = `<div class="muted">まだ回答がありません。</div>`;
-      return;
+    function getQid(){
+      const u = new URL(location.href);
+      return u.searchParams.get("id");
     }
 
-    el.innerHTML = await Promise.all(list.map(async (a)=>{
-      const d=a.data;
-      const mine = (d.ownerUid && currentUid && d.ownerUid === currentUid);
-      const helpful = await isHelpful(id, a.id).catch(()=>false);
-      const bestBadge = d.best ? `<span class="badge" style="border-color:#d4af37">🏆 ベスト回答</span>` : ``;
-
-      const thanks = (d.thanksText || "").trim();
-      const thanksBox = thanks ? `
-        <div class="notice" style="margin-top:10px">
-          <b>質問者からのお礼：</b><br>${esc(thanks)}
-        </div>
-      ` : ``;
-
-      const repliesHtml = await renderReplies(id, a.id);
-
-      return `
-        <div class="qitem" data-aid="${a.id}">
-          <div class="row" style="justify-content:space-between; align-items:flex-start">
-            <div>
-              <div><b>${esc(d.displayName || "匿名")}</b> ${d.social?`<small>（${esc(d.social)}）</small>`:""}</div>
-              <div style="margin-top:6px">${bestBadge}</div>
-            </div>
-            <small>参考：${d.helpfulCount||0}</small>
-          </div>
-
-          <div class="muted" style="margin-top:6px;white-space:pre-wrap">${esc(d.body || "")}</div>
-
-          ${thanksBox}
-
-          <div class="inline-actions">
-            <button class="btn helpfulBtn" data-aid="${a.id}" style="width:auto" ${maintenance ? "disabled" : ""}>
-              ${helpful ? "参考になった（解除）" : "参考になった"}
-            </button>
-            <button class="btn ghost reportA" data-aid="${a.id}" style="width:auto">通報</button>
-
-            ${isOwner ? `
-              <button class="btn" data-aid="${a.id}" class="bestBtn" style="width:auto" ${maintenance ? "disabled" : ""} onclick="return false;">ベストにする</button>
-              <button class="btn ghost toggleThanks" data-aid="${a.id}" style="width:auto">お礼を書く</button>
-            ` : ``}
-
-            ${mine ? `
-              <button class="btn ghost editA" data-aid="${a.id}" style="width:auto">編集</button>
-              <button class="btn danger delA" data-aid="${a.id}" style="width:auto">削除（ソフト）</button>
-            ` : ""}
-          </div>
-
-          <div class="editBox" data-aid="${a.id}" style="display:none;margin-top:10px">
-            <label>回答を編集</label>
-            <textarea class="editText">${esc(d.body||"")}</textarea>
-            <div class="row" style="margin-top:8px">
-              <button class="btn saveA" data-aid="${a.id}" style="width:auto" ${maintenance ? "disabled" : ""}>保存</button>
-              <div class="muted msg"></div>
-            </div>
-          </div>
-
-          <div class="thanksBox" data-aid="${a.id}" style="display:none;margin-top:10px">
-            <label>質問者からのお礼コメント</label>
-            <textarea class="thanksText" style="min-height:90px" placeholder="例：すごく参考になりました！ありがとうございます。">${esc(d.thanksText||"")}</textarea>
-            <div class="row" style="margin-top:8px">
-              <button class="btn saveThanks" data-aid="${a.id}" style="width:auto" ${maintenance ? "disabled" : ""}>お礼を保存</button>
-            </div>
-          </div>
-
-          <div class="card" style="margin-top:12px; padding:12px">
-            <div class="row" style="justify-content:space-between">
-              <b>返信（会話）</b>
-              <small class="muted">※全員返信OK</small>
-            </div>
-
-            <label style="margin-top:8px">返信を書く</label>
-            <input class="rName" placeholder="表示名（任意）">
-            <input class="rSocial" placeholder="SNS（任意）">
-            <textarea class="rBody" placeholder="追加質問・補足・感想など"></textarea>
-            <div class="row" style="margin-top:8px">
-              <button class="btn addReply" data-aid="${a.id}" style="width:auto" ${maintenance ? "disabled" : ""}>返信する</button>
-            </div>
-
-            <div class="replies" style="margin-top:10px">
-              ${repliesHtml}
-            </div>
-          </div>
-
-        </div>
-      `;
-    })).then(x=>x.join(""));
-  }
-
-  async function load(){
-    const status = document.getElementById("status");
-    if(!id){ status.textContent = "不正なURLです"; return; }
-
-    status.textContent = "読み込み中…";
-    await ensureAnonAuth();
-
-    const cfg = await getSiteConfig().catch(()=>({maintenance:false,message:""}));
-    maintenance = !!cfg.maintenance;
-    if(maintenance){
-      document.getElementById("maintBox").style.display = "block";
-      document.getElementById("maintMsg").textContent = cfg.message || "しばらくお待ちください。";
-      document.getElementById("aBtn").disabled = true;
-      document.getElementById("likeBtn").disabled = true;
+    function fmtTime(ts){
+      const sec = ts?.seconds;
+      if(!sec) return "";
+      const d = new Date(sec*1000);
+      return d.toLocaleString();
     }
 
-    const q = await getQuestion(id);
-    if(!q){ status.textContent = "質問が見つかりません"; return; }
-    qData = q.data;
+    async function boot(){
+      const qid = getQid();
+      if(!qid){
+        $("qBox").innerHTML = "<b>URLが不正です</b>";
+        return;
+      }
 
-    if(qData.deleted){
-      status.textContent = "この質問は削除されました。";
-      document.getElementById("title").textContent = "(削除済み)";
-      document.getElementById("body").textContent = "";
-      return;
+      // 匿名ログイン確保
+      await ensureAnonAuth();
+      $("uidInfo").textContent = `UID: ${currentUid}`;
+
+      // メンテ表示（ある場合）
+      try{
+        const conf = await getSiteConfig();
+        if(conf?.maintenance){
+          $("maintBox").style.display = "block";
+          $("maintMsg").textContent = conf.message || "";
+        }
+      }catch{}
+
+      // 任意ログイン
+      $("loginBtn").addEventListener("click", async ()=>{
+        const res = await optionalGoogleLogin();
+        if(res.ok){
+          alert("ログインOK（任意）");
+        }else{
+          alert("ログイン失敗: " + (res.error || ""));
+        }
+      });
+
+      // URLコピー
+      $("copyBtn").addEventListener("click", async ()=>{
+        const ok = await copyToClipboard(location.href);
+        if(ok) alert("コピーしました");
+      });
+
+      // 質問取得
+      await renderQuestion(qid);
+
+      // 保存ボタン
+      await setupWatch(qid);
+
+      // 共感ボタン
+      await setupLike(qid);
+
+      // 回答投稿
+      $("answerBtn").addEventListener("click", async ()=>{
+        const text = ($("answerText").value || "").trim();
+        if(!text) return alert("回答本文を入力してね");
+
+        if(containsDanger(text)){
+          $("dangerWarn").textContent = "⚠ 危険ワードが含まれている可能性があります。断定・攻撃表現は避けて、体験として書いてね。";
+          return;
+        }else{
+          $("dangerWarn").textContent = "";
+        }
+
+        $("answerBtn").disabled = true;
+        try{
+          await addAnswer(qid, { body: text });
+          $("answerText").value = "";
+          await renderAnswers(qid);
+          alert("回答を投稿しました");
+        }catch(e){
+          console.error(e);
+          alert("投稿に失敗: " + (e?.message || e));
+        }finally{
+          $("answerBtn").disabled = false;
+        }
+      });
+
+      // 回答一覧
+      await renderAnswers(qid);
     }
 
-    isOwner = (qData.ownerUid && currentUid && qData.ownerUid === currentUid);
+    async function renderQuestion(qid){
+      const q = await getQuestion(qid);
+      if(!q || q.data?.deleted){
+        $("qBox").innerHTML = "<b>この質問は見つかりませんでした（削除済みの可能性）</b>";
+        return;
+      }
 
-    document.getElementById("title").textContent = qData.title || "";
-    document.getElementById("cat").textContent = "カテゴリ：" + (qData.category || "未設定");
-    document.getElementById("reg").textContent = "地域：" + (qData.region || "未設定");
-    document.getElementById("who").textContent = "投稿者：" + (qData.displayName || "匿名") + (qData.social?`（${qData.social}）`:"");
-    document.getElementById("counts").textContent = `共感：${qData.likeCount||0}｜回答：${qData.answerCount||0}`;
-    document.getElementById("body").textContent = qData.body || "";
-    renderTags(Array.isArray(qData.tags) ? qData.tags : []);
+      const d = q.data;
+      $("qTitle").innerHTML = esc(d.title || "(無題)");
+      $("qBody").innerHTML  = esc(d.body || "");
+      $("qMeta").textContent = `共感:${d.likeCount||0} / 回答:${d.answerCount||0} / 作成:${fmtTime(d.createdAt)} ${d.bestAnswerId ? " / 🏆解決済" : " / 🟡未解決"}`;
 
-    const liked = await isLiked(id).catch(()=>false);
-    document.getElementById("likeBtn").textContent = liked ? "共感（解除）" : "共感";
+      // 質問者ツール
+      const isOwner = d.ownerUid && d.ownerUid === currentUid;
+      $("qOwnerTools").style.display = isOwner ? "flex" : "none";
 
-    if(isOwner){
-      document.getElementById("ownerActions").style.display = "block";
-      document.getElementById("eTitle").value = qData.title || "";
-      document.getElementById("eBody").value = qData.body || "";
-      if(maintenance){
-        document.getElementById("saveQ").disabled = true;
-        document.getElementById("delQ").disabled = true;
+      if(isOwner){
+        $("qEditBtn").onclick = ()=>{
+          $("qEditBox").style.display = "block";
+          $("qEditTitle").value = d.title || "";
+          $("qEditBody").value = d.body || "";
+          $("qEditWarn").textContent = "";
+        };
+
+        $("qEditCancelBtn").onclick = ()=>{
+          $("qEditBox").style.display = "none";
+        };
+
+        $("qEditSaveBtn").onclick = async ()=>{
+          const nt = ($("qEditTitle").value||"").trim();
+          const nb = ($("qEditBody").value||"").trim();
+          if(!nt) return alert("タイトルは必須です");
+
+          // 危険ワード軽く警告
+          if(containsDanger(nt + " " + nb)){
+            $("qEditWarn").textContent = "⚠ 危険ワードが含まれている可能性があります。断定・攻撃表現は避けてね。";
+            return;
+          }
+
+          $("qEditSaveBtn").disabled = true;
+          try{
+            await updateQuestion(qid, { title: nt, body: nb });
+            $("qEditBox").style.display = "none";
+            await renderQuestion(qid);
+            alert("更新しました");
+          }catch(e){
+            console.error(e);
+            alert("更新失敗: " + (e?.message || e));
+          }finally{
+            $("qEditSaveBtn").disabled = false;
+          }
+        };
+
+        $("qDeleteBtn").onclick = async ()=>{
+          if(!confirm("質問を削除します。よろしいですか？（ソフト削除）")) return;
+          try{
+            await softDeleteQuestion(qid);
+            alert("削除しました");
+            location.href = "index.html";
+          }catch(e){
+            console.error(e);
+            alert("削除失敗: " + (e?.message || e));
+          }
+        };
       }
     }
 
-    answersCache = await listAnswers(id);
-    status.textContent = "";
-    await renderAnswers();
-  }
+    async function setupWatch(qid){
+      async function refresh(){
+        const w = await isWatching(qid);
+        $("watchBtn").textContent = w ? "★ 保存済み" : "☆ 保存";
+        $("watchMsg").textContent = w ? "この質問に新しい回答が付くと通知します" : "";
+      }
 
-  // 任意ログイン
-  document.getElementById("loginBtn")?.addEventListener("click", async ()=>{
-    const r = await optionalGoogleLogin();
-    if(r.ok) alert("ログインしました（任意）");
-    else alert("ログインできませんでした。Firebase AuthでGoogleを有効化してください。\n" + (r.error||""));
-    await load();
-  });
+      $("watchBtn").addEventListener("click", async ()=>{
+        try{
+          const res = await toggleWatchQuestion(qid);
+          $("watchBtn").textContent = res.watching ? "★ 保存済み" : "☆ 保存";
+          $("watchMsg").textContent = res.watching ? "この質問に新しい回答が付くと通知します" : "";
+        }catch(e){
+          console.error(e);
+          alert("保存に失敗: " + (e?.message || e));
+        }
+      });
 
-  // URLコピー
-  document.getElementById("copyUrl").addEventListener("click", async ()=>{
-    await copyToClipboard(siteUrl());
-    alert("URLをコピーしました");
-  });
-
-  // 共感
-  document.getElementById("likeBtn").addEventListener("click", async ()=>{
-    if(maintenance) return;
-    await toggleLikeQuestion(id);
-    await load();
-  });
-
-  // 質問編集
-  document.getElementById("saveQ")?.addEventListener("click", async ()=>{
-    if(maintenance) return;
-    const msg = document.getElementById("qMsg");
-    const title = document.getElementById("eTitle").value.trim();
-    const body = document.getElementById("eBody").value.trim();
-    if(!title || !body){ alert("タイトルと本文は必須"); return; }
-    if(containsDanger(title+" "+body)){ alert("攻撃的・断定的な表現が含まれる可能性があります"); return; }
-    msg.textContent = "保存中…";
-    await updateQuestion(id, { title, body });
-    msg.textContent = "保存しました";
-    await load();
-  });
-
-  // 質問削除（ソフト）
-  document.getElementById("delQ")?.addEventListener("click", async ()=>{
-    if(maintenance) return;
-    if(!confirm("この質問を削除します（ソフト削除）。よろしいですか？")) return;
-    await softDeleteQuestion(id);
-    location.href = "index.html";
-  });
-
-  // 質問通報
-  document.getElementById("reportQ").addEventListener("click", async ()=>{
-    const reason = prompt("通報理由（例：個人情報/誹謗中傷/店舗や医師特定/スパム 等）");
-    if(!reason) return;
-    await createReport({ targetType:"question", qid:id, reason, pageUrl: siteUrl() });
-    alert("通報しました。ありがとうございます。");
-  });
-
-  // 回答投稿
-  document.getElementById("aBtn").addEventListener("click", async ()=>{
-    if(maintenance) return;
-    const st = document.getElementById("aStatus");
-    const displayName = document.getElementById("aName").value.trim();
-    const social = document.getElementById("aSocial").value.trim();
-    const body = document.getElementById("aBody").value.trim();
-    if(!body){ alert("回答本文は必須"); return; }
-    if(containsDanger(body)){ alert("攻撃的・断定的な表現が含まれる可能性があります"); return; }
-
-    st.textContent = "送信中…";
-    await addAnswer(id, { displayName, social, body });
-    document.getElementById("aBody").value = "";
-    st.textContent = "";
-    await load();
-  });
-
-  // 回答並び替え
-  document.getElementById("ansSort").addEventListener("change", renderAnswers);
-
-  // 各種クリック
-  document.addEventListener("click", async (e)=>{
-    const t = e.target;
-
-    if(t.classList.contains("tag")){
-      const tag = t.dataset.tag || "";
-      location.href = `index.html?search=${encodeURIComponent(tag)}`;
+      await refresh();
     }
 
-    if(t.classList.contains("helpfulBtn")){
-      if(maintenance) return;
-      const aid = t.dataset.aid;
-      await toggleHelpful(id, aid);
-      await load();
+    async function setupLike(qid){
+      async function refresh(){
+        const liked = await isLiked(qid);
+        $("likeBtn").textContent = liked ? "共感済み" : "共感";
+      }
+
+      $("likeBtn").addEventListener("click", async ()=>{
+        try{
+          await toggleLikeQuestion(qid);
+          await refresh();
+          await renderQuestion(qid);
+        }catch(e){
+          console.error(e);
+          alert("共感に失敗: " + (e?.message || e));
+        }
+      });
+
+      await refresh();
     }
 
-    if(t.classList.contains("reportA")){
-      const aid = t.dataset.aid;
-      const reason = prompt("通報理由（例：個人情報/誹謗中傷/店舗や医師特定/スパム 等）");
-      if(!reason) return;
-      await createReport({ targetType:"answer", qid:id, aid, reason, pageUrl: siteUrl() });
-      alert("通報しました。ありがとうございます。");
+    async function renderAnswers(qid){
+      const q = await getQuestion(qid);
+      const qData = q?.data || {};
+      const isQOwner = qData.ownerUid && qData.ownerUid === currentUid;
+
+      const list = await listAnswers(qid);
+      const live = list.filter(a => !a.data?.deleted);
+
+      $("ansCount").textContent = `（${live.length}件）`;
+
+      const box = $("answersBox");
+      box.innerHTML = "";
+      if(!live.length){
+        box.innerHTML = `<div class="muted">まだ回答がありません</div>`;
+        return;
+      }
+
+      for(const a of live){
+        const d = a.data || {};
+        const isAOwner = d.ownerUid && d.ownerUid === currentUid;
+
+        const wrap = document.createElement("div");
+        wrap.className = "ans";
+        wrap.innerHTML = `
+          <div class="ansHead">
+            <b>${d.best ? "🏆 ベストアンサー" : "回答"}</b>
+            <span class="muted small">${fmtTime(d.createdAt)}</span>
+            <span class="pill">参考:${d.helpfulCount||0}</span>
+            ${d.best ? `<span class="pill">選ばれました</span>` : ``}
+            <span class="right row" style="gap:6px">
+              <button class="btn ghost" data-act="helpful">参考になった</button>
+              <button class="btn ghost" data-act="report">通報</button>
+              ${isAOwner ? `<button class="btn ghost" data-act="edit">編集</button>` : ``}
+              ${isAOwner ? `<button class="btn ghost danger" data-act="del">削除</button>` : ``}
+              ${isQOwner ? `<button class="btn ghost" data-act="best">ベストにする</button>` : ``}
+            </span>
+          </div>
+
+          <div class="ansBody" id="ab_${a.id}">${esc(d.body||"")}</div>
+
+          <div id="edit_${a.id}" style="display:none;margin-top:8px">
+            <textarea id="editTa_${a.id}"></textarea>
+            <div class="row" style="margin-top:6px">
+              <button class="btn primary" data-act="saveEdit">保存</button>
+              <button class="btn ghost" data-act="cancelEdit">キャンセル</button>
+            </div>
+            <div class="danger small" id="editWarn_${a.id}"></div>
+          </div>
+
+          <div style="margin-top:10px">
+            <b class="small">お礼コメント（質問者のみ）</b>
+            <div class="muted small" style="margin-top:4px">${esc(d.thanksText || "（まだありません）")}</div>
+            ${isQOwner ? `
+              <div class="row" style="margin-top:6px">
+                <input id="thanksIn_${a.id}" type="text" placeholder="お礼（短文でOK）" />
+                <button class="btn ghost" data-act="thanks" style="width:auto">お礼送信</button>
+              </div>
+            ` : ``}
+          </div>
+
+          <div class="reply" id="replies_${a.id}" style="margin-top:12px">
+            <b class="small">返信</b>
+            <div id="replyList_${a.id}" class="muted small" style="margin-top:6px">読み込み中…</div>
+            <div style="margin-top:8px">
+              <textarea id="replyTa_${a.id}" placeholder="返信を書く（追質問もOK）" style="min-height:70px"></textarea>
+              <div class="row" style="margin-top:6px">
+                <button class="btn ghost" data-act="replySend" style="width:auto">返信する</button>
+              </div>
+              <div class="danger small" id="replyWarn_${a.id}"></div>
+            </div>
+          </div>
+        `;
+
+        // ボタン参照
+        const btnHelpful = wrap.querySelector('[data-act="helpful"]');
+        const btnReport  = wrap.querySelector('[data-act="report"]');
+        const btnEdit    = wrap.querySelector('[data-act="edit"]');
+        const btnDel     = wrap.querySelector('[data-act="del"]');
+        const btnBest    = wrap.querySelector('[data-act="best"]');
+        const btnThanks  = wrap.querySelector('[data-act="thanks"]');
+        const btnSaveE   = wrap.querySelector('[data-act="saveEdit"]');
+        const btnCancelE = wrap.querySelector('[data-act="cancelEdit"]');
+        const btnReply   = wrap.querySelector('[data-act="replySend"]');
+
+        // 参考になった（トグル）
+        try{
+          const h = await isHelpful(qid, a.id);
+          btnHelpful.textContent = h ? "参考済み" : "参考になった";
+        }catch{}
+
+        btnHelpful?.addEventListener("click", async ()=>{
+          try{
+            await toggleHelpful(qid, a.id);
+            await renderAnswers(qid);
+          }catch(e){
+            console.error(e);
+            alert("操作失敗: " + (e?.message || e));
+          }
+        });
+
+        // 通報
+        btnReport?.addEventListener("click", async ()=>{
+          const reason = prompt("通報理由（例：誹謗中傷、個人情報、広告など）");
+          if(!reason) return;
+          try{
+            await createReport({ type:"answer", qid, aid:a.id, reason });
+            alert("通報しました");
+          }catch(e){
+            console.error(e);
+            alert("通報失敗: " + (e?.message || e));
+          }
+        });
+
+        // 編集
+        btnEdit?.addEventListener("click", ()=>{
+          const boxE = document.getElementById("edit_"+a.id);
+          boxE.style.display = "block";
+          document.getElementById("editTa_"+a.id).value = d.body || "";
+          document.getElementById("editWarn_"+a.id).textContent = "";
+        });
+
+        btnCancelE?.addEventListener("click", ()=>{
+          document.getElementById("edit_"+a.id).style.display = "none";
+        });
+
+        btnSaveE?.addEventListener("click", async ()=>{
+          const ta = document.getElementById("editTa_"+a.id);
+          const text = (ta.value||"").trim();
+          if(!text) return alert("本文が空です");
+          if(containsDanger(text)){
+            document.getElementById("editWarn_"+a.id).textContent = "⚠ 危険ワードが含まれている可能性があります。断定表現は避けてね。";
+            return;
+          }
+          try{
+            await updateAnswer(qid, a.id, { body:text });
+            await renderAnswers(qid);
+          }catch(e){
+            console.error(e);
+            alert("更新失敗: " + (e?.message || e));
+          }
+        });
+
+        // 削除
+        btnDel?.addEventListener("click", async ()=>{
+          if(!confirm("この回答を削除しますか？（ソフト削除）")) return;
+          try{
+            await softDeleteAnswer(qid, a.id);
+            await renderAnswers(qid);
+          }catch(e){
+            console.error(e);
+            alert("削除失敗: " + (e?.message || e));
+          }
+        });
+
+        // ベストアンサー（質問者のみ）
+        btnBest?.addEventListener("click", async ()=>{
+          if(!confirm("この回答をベストアンサーにしますか？")) return;
+          try{
+            await setBestAnswer(qid, a.id);
+            await renderQuestion(qid);
+            await renderAnswers(qid);
+          }catch(e){
+            console.error(e);
+            alert("設定失敗: " + (e?.message || e));
+          }
+        });
+
+        // お礼（質問者のみ）
+        btnThanks?.addEventListener("click", async ()=>{
+          const v = document.getElementById("thanksIn_"+a.id)?.value || "";
+          const text = v.trim();
+          if(!text) return alert("お礼の文を入力してね");
+          if(containsDanger(text)){
+            alert("危険ワードっぽい表現が含まれているかも。柔らかい言い方にしてね。");
+            return;
+          }
+          try{
+            await setThanks(qid, a.id, text);
+            await renderAnswers(qid);
+          }catch(e){
+            console.error(e);
+            alert("送信失敗: " + (e?.message || e));
+          }
+        });
+
+        // 返信：読み込み＆投稿
+        await renderReplies(qid, a.id, isQOwner, isAOwner);
+
+        btnReply?.addEventListener("click", async ()=>{
+          const ta = document.getElementById("replyTa_"+a.id);
+          const text = (ta.value||"").trim();
+          if(!text) return;
+
+          if(containsDanger(text)){
+            document.getElementById("replyWarn_"+a.id).textContent = "⚠ 危険ワードが含まれている可能性があります。断定/攻撃表現は避けてね。";
+            return;
+          }else{
+            document.getElementById("replyWarn_"+a.id).textContent = "";
+          }
+
+          btnReply.disabled = true;
+          try{
+            await addReply(qid, a.id, { body:text });
+            ta.value = "";
+            await renderReplies(qid, a.id, isQOwner, isAOwner);
+          }catch(e){
+            console.error(e);
+            alert("返信失敗: " + (e?.message || e));
+          }finally{
+            btnReply.disabled = false;
+          }
+        });
+
+        box.appendChild(wrap);
+      }
     }
 
-    // ベストにする（質問者）
-    if(isOwner && t.textContent === "ベストにする"){
-      if(maintenance) return;
-      const aid = t.getAttribute("data-aid");
-      await setBestAnswer(id, aid);
-      await load();
+    async function renderReplies(qid, aid){
+      const list = await listReplies(qid, aid);
+      const live = list.filter(r => !r.data?.deleted);
+
+      const root = document.getElementById("replyList_"+aid);
+      if(!live.length){
+        root.innerHTML = `<span class="muted">返信なし</span>`;
+        return;
+      }
+
+      const html = live.map(r=>{
+        const d = r.data || {};
+        const mine = d.ownerUid === currentUid;
+        return `
+          <div style="margin:8px 0">
+            <div class="muted small">${fmtTime(d.createdAt)} ${mine ? " / あなた" : ""}</div>
+            <div style="white-space:pre-wrap">${esc(d.body||"")}</div>
+            <div class="row" style="margin-top:4px;gap:6px">
+              ${mine ? `<button class="btn ghost" data-ract="redit" data-rid="${r.id}" style="width:auto">編集</button>` : ``}
+              ${mine ? `<button class="btn ghost danger" data-ract="rdel" data-rid="${r.id}" style="width:auto">削除</button>` : ``}
+              <button class="btn ghost" data-ract="rrep" data-rid="${r.id}" style="width:auto">通報</button>
+            </div>
+            <div id="re_${aid}_${r.id}" style="display:none;margin-top:6px">
+              <textarea id="reTa_${aid}_${r.id}" style="min-height:70px"></textarea>
+              <div class="row" style="margin-top:6px">
+                <button class="btn primary" data-ract="rsave" data-rid="${r.id}" style="width:auto">保存</button>
+                <button class="btn ghost" data-ract="rcancel" data-rid="${r.id}" style="width:auto">キャンセル</button>
+              </div>
+              <div class="danger small" id="reWarn_${aid}_${r.id}"></div>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      root.innerHTML = html;
+
+      // イベント
+      root.querySelectorAll('[data-ract="redit"]').forEach(btn=>{
+        btn.addEventListener("click", ()=>{
+          const rid = btn.getAttribute("data-rid");
+          document.getElementById("re_"+aid+"_"+rid).style.display = "block";
+          document.getElementById("reTa_"+aid+"_"+rid).value =
+            (live.find(x=>x.id===rid)?.data?.body) || "";
+          document.getElementById("reWarn_"+aid+"_"+rid).textContent = "";
+        });
+      });
+
+      root.querySelectorAll('[data-ract="rcancel"]').forEach(btn=>{
+        btn.addEventListener("click", ()=>{
+          const rid = btn.getAttribute("data-rid");
+          document.getElementById("re_"+aid+"_"+rid).style.display = "none";
+        });
+      });
+
+      root.querySelectorAll('[data-ract="rsave"]').forEach(btn=>{
+        btn.addEventListener("click", async ()=>{
+          const rid = btn.getAttribute("data-rid");
+          const ta = document.getElementById("reTa_"+aid+"_"+rid);
+          const text = (ta.value||"").trim();
+          if(!text) return alert("本文が空です");
+          if(containsDanger(text)){
+            document.getElementById("reWarn_"+aid+"_"+rid).textContent = "⚠ 危険ワードが含まれている可能性があります。";
+            return;
+          }
+          try{
+            await updateReply(qid, aid, rid, { body:text });
+            await renderReplies(qid, aid);
+          }catch(e){
+            console.error(e);
+            alert("更新失敗: " + (e?.message || e));
+          }
+        });
+      });
+
+      root.querySelectorAll('[data-ract="rdel"]').forEach(btn=>{
+        btn.addEventListener("click", async ()=>{
+          const rid = btn.getAttribute("data-rid");
+          if(!confirm("返信を削除しますか？")) return;
+          try{
+            await softDeleteReply(qid, aid, rid);
+            await renderReplies(qid, aid);
+          }catch(e){
+            console.error(e);
+            alert("削除失敗: " + (e?.message || e));
+          }
+        });
+      });
+
+      root.querySelectorAll('[data-ract="rrep"]').forEach(btn=>{
+        btn.addEventListener("click", async ()=>{
+          const rid = btn.getAttribute("data-rid");
+          const reason = prompt("通報理由（例：誹謗中傷、個人情報、広告など）");
+          if(!reason) return;
+          try{
+            await createReport({ type:"reply", qid, aid, rid, reason });
+            alert("通報しました");
+          }catch(e){
+            console.error(e);
+            alert("通報失敗: " + (e?.message || e));
+          }
+        });
+      });
     }
 
-    // お礼欄の表示
-    if(t.classList.contains("toggleThanks")){
-      const aid = t.dataset.aid;
-      const box = document.querySelector(`.thanksBox[data-aid="${aid}"]`);
-      if(box) box.style.display = (box.style.display==="none" ? "block" : "none");
-    }
-
-    // お礼保存
-    if(t.classList.contains("saveThanks")){
-      if(maintenance) return;
-      const aid = t.dataset.aid;
-      const wrap = document.querySelector(`.qitem[data-aid="${aid}"]`);
-      const text = wrap?.querySelector(".thanksText")?.value?.trim() || "";
-      if(containsDanger(text)){ alert("攻撃的・断定的な表現が含まれる可能性があります"); return; }
-      await setThanks(id, aid, text);
-      await load();
-    }
-
-    // 編集表示
-    if(t.classList.contains("editA")){
-      const aid = t.dataset.aid;
-      const box = document.querySelector(`.editBox[data-aid="${aid}"]`);
-      if(box) box.style.display = (box.style.display==="none" ? "block" : "none");
-    }
-
-    // 回答削除（ソフト）
-    if(t.classList.contains("delA")){
-      if(maintenance) return;
-      const aid = t.dataset.aid;
-      if(!confirm("この回答を削除します（ソフト削除）。よろしいですか？")) return;
-      await softDeleteAnswer(id, aid);
-      await load();
-    }
-
-    // 回答保存
-    if(t.classList.contains("saveA")){
-      if(maintenance) return;
-      const aid = t.dataset.aid;
-      const wrap = document.querySelector(`.qitem[data-aid="${aid}"]`);
-      const ta = wrap?.querySelector(".editText");
-      const msg = wrap?.querySelector(".msg");
-      const body = ta?.value?.trim() || "";
-      if(!body){ alert("本文は必須"); return; }
-      if(containsDanger(body)){ alert("攻撃的・断定的な表現が含まれる可能性があります"); return; }
-      if(msg) msg.textContent = "保存中…";
-      await updateAnswer(id, aid, { body });
-      if(msg) msg.textContent = "保存しました";
-      await load();
-    }
-
-    // 返信投稿
-    if(t.classList.contains("addReply")){
-      if(maintenance) return;
-      const aid = t.dataset.aid;
-      const wrap = document.querySelector(`.qitem[data-aid="${aid}"]`);
-      const name = wrap?.querySelector(".rName")?.value?.trim() || "";
-      const social = wrap?.querySelector(".rSocial")?.value?.trim() || "";
-      const body = wrap?.querySelector(".rBody")?.value?.trim() || "";
-      if(!body){ alert("返信本文は必須"); return; }
-      if(containsDanger(body)){ alert("攻撃的・断定的な表現が含まれる可能性があります"); return; }
-      await addReply(id, aid, { displayName:name, social, body });
-      await load();
-    }
-
-    // 返信編集保存
-    if(t.classList.contains("saveReply")){
-      const aid = t.dataset.aid;
-      const rid = t.dataset.rid;
-      const ta = document.querySelector(`textarea.editReplyText[data-aid="${aid}"][data-rid="${rid}"]`);
-      const body = ta?.value?.trim() || "";
-      if(!body){ alert("返信本文は必須"); return; }
-      if(containsDanger(body)){ alert("攻撃的・断定的な表現が含まれる可能性があります"); return; }
-      await updateReply(id, aid, rid, { body });
-      await load();
-    }
-
-    // 返信削除（ソフト）
-    if(t.classList.contains("softDelReply")){
-      const aid = t.dataset.aid;
-      const rid = t.dataset.rid;
-      if(!confirm("返信を削除します（ソフト）。よろしいですか？")) return;
-      await softDeleteReply(id, aid, rid);
-      await load();
-    }
-  });
-
-  load();
-</script>
+    boot();
+  </script>
 </body>
 </html>
