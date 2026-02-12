@@ -10,9 +10,7 @@
 <header>
   <div class="wrap">
     <h1>質問する</h1>
-    <nav>
-      <a href="index.html">一覧</a>
-    </nav>
+    <nav><a href="index.html">一覧</a></nav>
   </div>
 </header>
 
@@ -27,19 +25,24 @@
     <input id="displayName" placeholder="例：あや / 匿名希望">
 
     <label>SNS（任意）</label>
-    <input id="social" placeholder="例：X @xxxx / なし（空欄OK）">
+    <input id="social" placeholder="例：X @xxxx / 空欄OK">
 
-    <label>カテゴリ</label>
-    <select id="category">
-      <option>二重</option><option>鼻</option><option>輪郭</option><option>目元（クマ等）</option>
-      <option>美容皮膚</option><option>脱毛</option><option>その他</option>
-    </select>
-
-    <label>地域</label>
-    <select id="region">
-      <option>未設定</option><option>東京</option><option>神奈川</option><option>埼玉</option><option>千葉</option>
-      <option>大阪</option><option>その他</option>
-    </select>
+    <div class="grid">
+      <div>
+        <label>カテゴリ</label>
+        <select id="category">
+          <option>二重</option><option>鼻</option><option>輪郭</option><option>目元（クマ等）</option>
+          <option>美容皮膚</option><option>脱毛</option><option>その他</option>
+        </select>
+      </div>
+      <div>
+        <label>地域</label>
+        <select id="region">
+          <option>未設定</option><option>東京</option><option>神奈川</option><option>埼玉</option><option>千葉</option>
+          <option>大阪</option><option>その他</option>
+        </select>
+      </div>
+    </div>
 
     <label>タイトル（必須）</label>
     <input id="title" placeholder="例：埋没って取れやすい？ダウンタイムどれくらい？">
@@ -73,10 +76,7 @@
     const body = document.getElementById("body").value.trim();
     const tagsRaw = document.getElementById("tags").value.trim();
 
-    if(!title || !body){
-      alert("タイトルと本文は必須です");
-      return;
-    }
+    if(!title || !body){ alert("タイトルと本文は必須です"); return; }
     if(containsDanger(title+" "+body+" "+tagsRaw)){
       alert("攻撃的・断定的な表現が含まれる可能性があります。言い回しを柔らかくしてください。");
       return;

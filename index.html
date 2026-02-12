@@ -19,22 +19,19 @@
 
 <main>
   <div class="card">
-    <div class="row" style="justify-content:space-between">
-      <div>
-        <div class="muted">整形前の不安・疑問を匿名で。医師名/店舗の詳細/個人情報は書かない。</div>
-      </div>
-    </div>
+    <div class="muted">スペース区切り＝掛け算検索（AND）</div>
 
     <div class="grid" style="margin-top:12px">
       <div>
         <label>検索（AND検索）</label>
         <input id="search" placeholder="例：埋没 ダウンタイム / 親バレ 会社" />
-        <div class="muted">スペース区切り＝掛け算検索（AND）</div>
       </div>
       <div>
         <label>並び替え</label>
         <select id="sort">
           <option value="new">新しい順</option>
+          <option value="like">共感が多い順</option>
+          <option value="ans">回答が多い順</option>
           <option value="old">古い順</option>
         </select>
       </div>
@@ -75,10 +72,16 @@
     return `${d.title||""} ${d.body||""} ${d.category||""} ${d.region||""} ${tags}`;
   }
 
-  function render(){
-    const s = document.getElementById("search").value;
-    const tokens = tokenize(s);
+  function sortList(list, sort){
+    const cp = list.slice();
+    if(sort==="old") return cp.reverse();
+    if(sort==="like") return cp.sort((a,b)=> (b.data.likeCount||0) - (a.data.likeCount||0));
+    if(sort==="ans")  return cp.sort((a,b)=> (b.data.answerCount||0) - (a.data.answerCount||0));
+    return cp; // new（createdAt descのまま）
+  }
 
+  function render(){
+    const tokens = tokenize(document.getElementById("search").value);
     const cat = document.getElementById("cat").value;
     const reg = document.getElementById("reg").value;
     const sort = document.getElementById("sort").value;
@@ -90,7 +93,7 @@
       return andMatch(buildHay(q), tokens);
     });
 
-    if(sort==="old") list = list.slice().reverse();
+    list = sortList(list, sort);
 
     const el = document.getElementById("list");
     if(list.length===0){
@@ -110,6 +113,8 @@
           <div class="qmeta">
             <small>地域：${esc(d.region||"未設定")}</small>
             <small>投稿者：${esc(d.displayName||"匿名")}${d.social?`（${esc(d.social)}）`:""}</small>
+            <small>共感：${d.likeCount||0}</small>
+            <small>回答：${d.answerCount||0}</small>
           </div>
           <div class="muted" style="margin-top:8px">${esc((d.body||"").slice(0,140))}${(d.body||"").length>140?"…":""}</div>
           <div style="margin-top:8px">
@@ -139,6 +144,6 @@
   });
 
   init();
-<script src="app.js"></script>
+</script>
 </body>
 </html>
