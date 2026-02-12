@@ -1,0 +1,45 @@
+:root{
+  --bg:#f7f7f7; --card:#fff; --text:#111; --muted:#666; --line:#e9e9e9;
+  --btn:#111; --btnText:#fff; --pill:#f1f1f1;
+}
+*{box-sizing:border-box}
+body{
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans JP",sans-serif;
+  background:var(--bg); margin:0; color:var(--text);
+}
+a{color:#1a73e8;text-decoration:none}
+header{
+  background:#111; color:#fff; padding:16px 14px;
+}
+header .wrap{max-width:980px;margin:0 auto;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+h1{font-size:18px;margin:0}
+nav{display:flex;gap:10px;flex-wrap:wrap}
+nav a{background:rgba(255,255,255,.14);color:#fff;padding:8px 10px;border-radius:10px}
+main{max-width:980px;margin:0 auto;padding:18px 14px}
+.card{
+  background:var(--card); border:1px solid var(--line);
+  border-radius:14px; padding:16px; margin:14px 0;
+}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:720px){.grid{grid-template-columns:1fr}}
+label{display:block;font-weight:700;margin-top:10px}
+input,select,textarea{
+  width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:12px;
+  font-size:14px; margin-top:6px; background:#fff;
+}
+textarea{min-height:140px;resize:vertical}
+.btn{
+  background:var(--btn); color:var(--btnText); border:none; border-radius:12px;
+  padding:11px 14px; font-size:15px; cursor:pointer;
+}
+.btn:disabled{opacity:.6;cursor:not-allowed}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.pill{display:inline-block;background:var(--pill);padding:6px 10px;border-radius:999px;font-size:12px;margin:6px 8px 0 0;border:1px solid #e2e2e2}
+.muted{color:var(--muted);font-size:12px;line-height:1.6}
+.qitem{padding:14px 0;border-bottom:1px solid var(--line)}
+.qitem:last-child{border-bottom:none}
+.qtitle{font-weight:800;font-size:16px;margin:0}
+.qmeta{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+small{color:var(--muted)}
+hr{border:none;border-top:1px solid var(--line);margin:14px 0}
+.badge{font-size:12px;padding:4px 8px;border:1px solid #ddd;border-radius:999px;color:#333;background:#fff}

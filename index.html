@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>整形相談室</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>整形相談室（匿名Q&A）</h1>
+    <nav>
+      <a href="index.html">一覧</a>
+      <a href="ask.html">質問する</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <div>
+        <div class="muted">整形前の不安・疑問を匿名で。医師名/店舗の詳細/個人情報は書かない。</div>
+      </div>
+    </div>
+
+    <div class="grid" style="margin-top:12px">
+      <div>
+        <label>検索（AND検索）</label>
+        <input id="search" placeholder="例：埋没 ダウンタイム / 親バレ 会社" />
+        <div class="muted">スペース区切り＝掛け算検索（AND）</div>
+      </div>
+      <div>
+        <label>並び替え</label>
+        <select id="sort">
+          <option value="new">新しい順</option>
+          <option value="old">古い順</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div>
+        <label>カテゴリ絞り込み</label>
+        <select id="cat">
+          <option value="">指定なし</option>
+          <option>二重</option><option>鼻</option><option>輪郭</option><option>目元（クマ等）</option>
+          <option>美容皮膚</option><option>脱毛</option><option>その他</option>
+        </select>
+      </div>
+      <div>
+        <label>地域絞り込み</label>
+        <select id="reg">
+          <option value="">指定なし</option>
+          <option>東京</option><option>神奈川</option><option>埼玉</option><option>千葉</option>
+          <option>大阪</option><option>その他</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="status" class="muted" style="margin-top:10px"></div>
+    <div id="list" style="margin-top:10px"></div>
+  </div>
+</main>
+
+<script type="module">
+  import { listQuestions, tokenize, andMatch, esc } from "./app.js";
+
+  let all = [];
+
+  function buildHay(q){
+    const d=q.data;
+    const tags = Array.isArray(d.tags) ? d.tags.join(" ") : "";
+    return `${d.title||""} ${d.body||""} ${d.category||""} ${d.region||""} ${tags}`;
+  }
+
+  function render(){
+    const s = document.getElementById("search").value;
+    const tokens = tokenize(s);
+
+    const cat = document.getElementById("cat").value;
+    const reg = document.getElementById("reg").value;
+    const sort = document.getElementById("sort").value;
+
+    let list = all.filter(q=>{
+      const d=q.data;
+      if(cat && d.category !== cat) return false;
+      if(reg && d.region !== reg) return false;
+      return andMatch(buildHay(q), tokens);
+    });
+
+    if(sort==="old") list = list.slice().reverse();
+
+    const el = document.getElementById("list");
+    if(list.length===0){
+      el.innerHTML = `<div class="muted">該当する質問がありません。</div>`;
+      return;
+    }
+
+    el.innerHTML = list.map(q=>{
+      const d=q.data;
+      const tags = Array.isArray(d.tags) ? d.tags : [];
+      return `
+        <div class="qitem">
+          <div class="row" style="justify-content:space-between">
+            <div class="qtitle"><a href="q.html?id=${encodeURIComponent(q.id)}">${esc(d.title)}</a></div>
+            <span class="badge">${esc(d.category||"")}</span>
+          </div>
+          <div class="qmeta">
+            <small>地域：${esc(d.region||"未設定")}</small>
+            <small>投稿者：${esc(d.displayName||"匿名")}${d.social?`（${esc(d.social)}）`:""}</small>
+          </div>
+          <div class="muted" style="margin-top:8px">${esc((d.body||"").slice(0,140))}${(d.body||"").length>140?"…":""}</div>
+          <div style="margin-top:8px">
+            ${tags.map(t=>`<span class="pill">#${esc(t)}</span>`).join("")}
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  async function init(){
+    const status = document.getElementById("status");
+    status.textContent = "読み込み中…";
+    try{
+      all = await listQuestions();
+      status.textContent = "";
+      render();
+    }catch(e){
+      console.error(e);
+      status.textContent = "読み込みエラー：" + (e?.message || e);
+    }
+  }
+
+  ["search","cat","reg","sort"].forEach(id=>{
+    document.getElementById(id).addEventListener("input", render);
+    document.getElementById(id).addEventListener("change", render);
+  });
+
+  init();
+<script src="app.js"></script>
+</body>
+</html>
