@@ -104,6 +104,50 @@ export async function getSiteConfig(){
   return _siteCache;
 }
 
+// ===== 通知（追加）=====
+// notifications: { ownerUid, targetUid, type, qid, aid, rid, message, createdAt, read:false }
+export async function createNotification(targetUid, payload){
+  await ensureAnonAuth();
+  if(!targetUid) return null;
+
+  // 重要：ownerUidをtargetUidにしておくと
+  // 「自分の通知だけ更新/削除OK」のルールで運用できる
+  const docu = {
+    ownerUid: targetUid,
+    targetUid,
+    type: payload?.type || "info",
+    qid: payload?.qid || null,
+    aid: payload?.aid || null,
+    rid: payload?.rid || null,
+    message: payload?.message || "",
+    createdAt: serverTimestamp(),
+    read: false
+  };
+  return addDoc(collection(db, "notifications"), docu);
+}
+
+export async function listMyNotifications(limitN = 30){
+  await ensureAnonAuth();
+
+  // MVP: 全件をcreatedAt descで取って、targetUid==自分だけ返す（小規模ならOK）
+  const qy = query(collection(db, "notifications"), orderBy("createdAt","desc"), limit(limitN));
+  const snap = await getDocs(qy);
+
+  const out = [];
+  snap.forEach(d=>{
+    const data = d.data() || {};
+    if(data.targetUid === currentUid){
+      out.push({ id:d.id, data });
+    }
+  });
+  return out;
+}
+
+export async function markNotificationRead(nid){
+  await ensureAnonAuth();
+  await updateDoc(doc(db,"notifications",nid), { read:true, readAt: serverTimestamp() });
+}
+
 // ===== 質問 =====
 export async function createQuestion(payload){
   await ensureAnonAuth();
@@ -157,6 +201,7 @@ export async function listAnswers(qid){
 
 export async function addAnswer(qid, payload){
   await ensureAnonAuth();
+
   payload.ownerUid = currentUid;
   payload.createdAt = serverTimestamp();
   payload.updatedAt = null;
@@ -168,6 +213,23 @@ export async function addAnswer(qid, payload){
 
   const res = await addDoc(collection(db,"questions",qid,"answers"), payload);
   await updateDoc(doc(db,"questions",qid), { answerCount: increment(1) });
+
+  // 通知：質問者へ（自分が質問者なら通知しない）
+  try{
+    const qSnap = await getDoc(doc(db,"questions",qid));
+    const q = qSnap.data() || {};
+    if(q.ownerUid && q.ownerUid !== currentUid){
+      await createNotification(q.ownerUid, {
+        type: "answer",
+        qid,
+        aid: res.id,
+        message: "あなたの質問に回答がつきました"
+      });
+    }
+  }catch(e){
+    console.warn("notify(answer) failed", e);
+  }
+
   return res;
 }
 
@@ -189,7 +251,7 @@ export async function setBestAnswer(qid, aid){
   const qRef = doc(db,"questions",qid);
   const aRef = doc(db,"questions",qid,"answers",aid);
 
-  return runTransaction(db, async (tx)=>{
+  const result = await runTransaction(db, async (tx)=>{
     const qSnap = await tx.get(qRef);
     if(!qSnap.exists()) throw new Error("question not found");
     const q = qSnap.data();
@@ -198,12 +260,30 @@ export async function setBestAnswer(qid, aid){
     const prev = q.bestAnswerId;
     if(prev && prev !== aid){
       const prevRef = doc(db,"questions",qid,"answers",prev);
-      tx.update(prevRef, { best:false });
+      tx.update(prevRef, { best:false, updatedAt: serverTimestamp() });
     }
     tx.update(qRef, { bestAnswerId: aid, updatedAt: serverTimestamp() });
     tx.update(aRef, { best:true, updatedAt: serverTimestamp() });
     return { ok:true };
   });
+
+  // 通知：ベストアンサーに選ばれた（回答者へ）
+  try{
+    const aSnap = await getDoc(aRef);
+    const a = aSnap.data() || {};
+    if(a.ownerUid && a.ownerUid !== currentUid){
+      await createNotification(a.ownerUid, {
+        type: "best",
+        qid,
+        aid,
+        message: "あなたの回答がベストアンサーに選ばれました"
+      });
+    }
+  }catch(e){
+    console.warn("notify(best) failed", e);
+  }
+
+  return result;
 }
 
 // お礼コメント（質問者が回答に付ける）
@@ -212,7 +292,7 @@ export async function setThanks(qid, aid, text){
   const qRef = doc(db,"questions",qid);
   const aRef = doc(db,"questions",qid,"answers",aid);
 
-  return runTransaction(db, async (tx)=>{
+  const result = await runTransaction(db, async (tx)=>{
     const qSnap = await tx.get(qRef);
     if(!qSnap.exists()) throw new Error("question not found");
     const q = qSnap.data();
@@ -221,6 +301,24 @@ export async function setThanks(qid, aid, text){
     tx.update(aRef, { thanksText: text || "", thanksAt: serverTimestamp(), updatedAt: serverTimestamp() });
     return { ok:true };
   });
+
+  // 通知：お礼が来た（回答者へ）
+  try{
+    const aSnap = await getDoc(aRef);
+    const a = aSnap.data() || {};
+    if(a.ownerUid && a.ownerUid !== currentUid){
+      await createNotification(a.ownerUid, {
+        type: "thanks",
+        qid,
+        aid,
+        message: "あなたの回答にお礼コメントがつきました"
+      });
+    }
+  }catch(e){
+    console.warn("notify(thanks) failed", e);
+  }
+
+  return result;
 }
 
 // ===== 共感（質問） =====
@@ -291,7 +389,27 @@ export async function addReply(qid, aid, payload){
   payload.createdAt = serverTimestamp();
   payload.updatedAt = null;
   payload.deleted = false;
-  return addDoc(collection(db,"questions",qid,"answers",aid,"replies"), payload);
+
+  const res = await addDoc(collection(db,"questions",qid,"answers",aid,"replies"), payload);
+
+  // 通知：回答者へ（自分が回答者なら通知しない）
+  try{
+    const aSnap = await getDoc(doc(db,"questions",qid,"answers",aid));
+    const a = aSnap.data() || {};
+    if(a.ownerUid && a.ownerUid !== currentUid){
+      await createNotification(a.ownerUid, {
+        type: "reply",
+        qid,
+        aid,
+        rid: res.id,
+        message: "あなたの回答に返信がつきました"
+      });
+    }
+  }catch(e){
+    console.warn("notify(reply) failed", e);
+  }
+
+  return res;
 }
 
 export async function updateReply(qid, aid, rid, patch){

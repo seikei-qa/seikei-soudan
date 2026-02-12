@@ -10,223 +10,274 @@
 
   gtag('config', 'G-4QH9F5T9PD');
 </script>
+
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>整形相談室</title>
-  <link rel="stylesheet" href="style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>整形相談Q&A</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;margin:0;background:#f6f7fb;color:#111;}
+    .wrap{max-width:980px;margin:0 auto;padding:16px;}
+    .topbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;}
+    .brand{font-weight:800;font-size:18px}
+    .muted{color:#666}
+    .row{display:flex;gap:12px;flex-wrap:wrap}
+    .card{background:#fff;border:1px solid #e6e8ef;border-radius:12px;padding:12px;box-shadow:0 1px 0 rgba(0,0,0,.03)}
+    .btn{border:1px solid #cfd5e5;background:#fff;border-radius:10px;padding:8px 10px;cursor:pointer}
+    .btn.primary{background:#111;color:#fff;border-color:#111}
+    .btn.ghost{background:#fff}
+    .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    input[type="text"]{padding:8px;border-radius:10px;border:1px solid #cfd5e5;min-width:220px}
+    select{padding:8px;border-radius:10px;border:1px solid #cfd5e5}
+    a{color:#111;text-decoration:none}
+    a:hover{text-decoration:underline}
+    .qmeta{font-size:13px;color:#666;margin-top:4px}
+    .pill{display:inline-block;font-size:12px;border:1px solid #e6e8ef;border-radius:999px;padding:2px 8px;margin-left:6px}
+    .new{color:#d00;border-color:#ffd1d1;background:#fff5f5}
+    .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+    @media (max-width:900px){ .grid3{grid-template-columns:1fr} }
+    .miniItem{margin:8px 0}
+    .miniItem .meta{font-size:12px;color:#777;margin-top:2px}
+    .list .card{margin-bottom:12px}
+    .divider{height:1px;background:#e6e8ef;margin:12px 0}
+  </style>
 </head>
+
 <body>
-<header>
   <div class="wrap">
-    <h1>整形相談室（匿名Q&A）</h1>
-    <nav>
-      <a href="index.html">一覧</a>
-      <a href="ask.html">質問する</a>
-      <a href="rank.html">ランキング</a>
 
-    </nav>
-  </div>
-</header>
-
-<main>
-  <div id="maintBox" class="card" style="display:none">
-    <div class="notice">
-      <b>メンテナンス中：</b><span id="maintMsg"></span><br>
-      現在「投稿」は停止中です（閲覧は可能）。
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="notice">
-      <b>注意：</b>医師名・店舗の詳細・個人情報は書かない。断定や誹謗中傷ではなく「不安/疑問」の形に。<br>
-      NG例：<span class="kbd">詐欺</span> <span class="kbd">医療ミス</span> <span class="kbd">潰れろ</span> などの断定・攻撃ワード
-    </div>
-
-    <div class="muted" style="margin-top:10px">スペース区切り＝掛け算検索（AND）。タグをクリックすると検索に追加。</div>
-
-    <div class="grid" style="margin-top:12px">
-      <div>
-        <label>検索（AND検索）</label>
-        <input id="search" placeholder="例：埋没 ダウンタイム / 親バレ 会社" />
+    <div class="topbar">
+      <div class="brand">整形相談Q&A</div>
+      <div class="controls">
+        <a class="btn primary" href="ask.html">＋ 質問する</a>
       </div>
-      <div>
-        <label>並び替え</label>
-        <select id="sort">
-          <option value="like" selected>共感が多い順（おすすめ）</option>
+    </div>
+
+    <!-- 🔔通知（indexで見る） -->
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <div style="font-weight:800">🔔 通知（あなた宛て）</div>
+        <button id="reloadNotiBtn" class="btn ghost" style="width:auto">更新</button>
+      </div>
+      <div id="notiBox" class="muted" style="margin-top:8px">読み込み中…</div>
+      <div class="muted" style="font-size:12px;margin-top:6px">
+        ※通知は「回答・返信・ベストアンサー・お礼」が発生したときに溜まります
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- 🔥急上昇 / 🏆人気 / 🟡未解決 -->
+    <div class="grid3">
+      <div class="card">
+        <div style="font-weight:800">🔥 急上昇</div>
+        <div id="trendingBox" class="muted" style="margin-top:8px">読み込み中…</div>
+      </div>
+      <div class="card">
+        <div style="font-weight:800">🏆 人気質問</div>
+        <div id="popularBox" class="muted" style="margin-top:8px">読み込み中…</div>
+      </div>
+      <div class="card">
+        <div style="font-weight:800">🟡 未解決（ベスト未決）</div>
+        <div id="unbestBox" class="muted" style="margin-top:8px">読み込み中…</div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- 検索 & 並び替え -->
+    <div class="card">
+      <div class="controls">
+        <input id="searchInput" type="text" placeholder="検索（例：埋没 / 鼻 / 後悔 / 親バレ）" />
+        <select id="sortMode">
+          <option value="like">共感の多い順</option>
           <option value="new">新しい順</option>
-          <option value="ans">回答が多い順</option>
           <option value="old">古い順</option>
+          <option value="unbest">ベストアンサー未決</option>
+          <option value="many">回答多い順</option>
+          <option value="few">回答少ない順</option>
         </select>
+        <button id="clearBtn" class="btn ghost" style="width:auto">クリア</button>
+      </div>
+      <div class="muted" style="font-size:12px;margin-top:6px">
+        ヒント：回答者は「未解決」や「回答少ない順」を見ると答えやすいです
       </div>
     </div>
 
-    <div class="grid">
-      <div>
-        <label>カテゴリ絞り込み</label>
-        <select id="cat">
-          <option value="">指定なし</option>
-          <option>二重</option><option>鼻</option><option>輪郭</option><option>目元（クマ等）</option>
-          <option>美容皮膚</option><option>脱毛</option><option>その他</option>
-        </select>
-      </div>
-      <div>
-        <label>地域絞り込み</label>
-        <select id="reg">
-          <option value="">指定なし</option>
-          <option>東京</option><option>神奈川</option><option>埼玉</option><option>千葉</option>
-          <option>大阪</option><option>その他</option>
-        </select>
-      </div>
-    </div>
+    <div style="height:12px"></div>
 
-    <div id="status" class="muted" style="margin-top:10px"></div>
-    <div id="list" style="margin-top:10px"></div>
+    <!-- 質問一覧 -->
+    <div id="list" class="list"></div>
 
-    <div class="pager">
-      <button id="prev">前へ</button>
-      <span class="muted" id="pageInfo"></span>
-      <button id="next">次へ</button>
-    </div>
   </div>
-</main>
 
-<script type="module">
-  import { listQuestions, tokenize, andMatch, esc, getSiteConfig } from "./app.js";
+  <!-- ✅ ここからJS（全部入り） -->
+  <script type="module">
+    import {
+      listQuestions, esc,
+      listMyNotifications, markNotificationRead
+    } from "./app.js";
 
-  const PAGE_SIZE = 20;
-  let page = 1;
-  let all = [];
-  let filtered = [];
+    let all = [];
 
-  function buildHay(q){
-    const d=q.data;
-    const tags = Array.isArray(d.tags) ? d.tags.join(" ") : "";
-    return `${d.title||""} ${d.body||""} ${d.category||""} ${d.region||""} ${tags}`;
-  }
-
-  function sortList(list, sort){
-    const cp = list.slice();
-    if(sort==="old") return cp.reverse();
-    if(sort==="like") return cp.sort((a,b)=> (b.data.likeCount||0) - (a.data.likeCount||0));
-    if(sort==="ans")  return cp.sort((a,b)=> (b.data.answerCount||0) - (a.data.answerCount||0));
-    return cp; // new（createdAt descのまま）
-  }
-
-  function apply(){
-    const tokens = tokenize(document.getElementById("search").value);
-    const cat = document.getElementById("cat").value;
-    const reg = document.getElementById("reg").value;
-    const sort = document.getElementById("sort").value;
-
-    filtered = all
-      .filter(q => !q.data?.deleted) // ソフト削除は表示しない
-      .filter(q=>{
-        const d=q.data;
-        if(cat && d.category !== cat) return false;
-        if(reg && d.region !== reg) return false;
-        return andMatch(buildHay(q), tokens);
-      });
-
-    filtered = sortList(filtered, sort);
-    page = 1;
-    render();
-  }
-
-  function render(){
-    const el = document.getElementById("list");
-    const total = filtered.length;
-    if(total===0){
-      el.innerHTML = `<div class="muted">該当する質問がありません。</div>`;
-      document.getElementById("pageInfo").textContent = "";
-      document.getElementById("prev").disabled = true;
-      document.getElementById("next").disabled = true;
-      return;
+    // 急上昇スコア（新しさ×共感）
+    function scoreTrending(d){
+      const like = d.likeCount || 0;
+      const sec  = d.createdAt?.seconds || 0;
+      const ageH = Math.max(1, (Date.now()/1000 - sec) / 3600);
+      return like / Math.pow(ageH + 2, 0.7);
     }
 
-    const maxPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
-    if(page > maxPage) page = maxPage;
-
-    const start = (page-1)*PAGE_SIZE;
-    const view = filtered.slice(start, start+PAGE_SIZE);
-
-    el.innerHTML = view.map(q=>{
-      const d=q.data;
-      const tags = Array.isArray(d.tags) ? d.tags : [];
+    function fmtMiniItem(q){
+      const d = q.data || {};
+      const title = esc(d.title || "(無題)");
+      const a = d.answerCount || 0;
+      const l = d.likeCount || 0;
+      const solved = d.bestAnswerId ? "🏆" : "🟡";
       return `
-        <div class="qitem">
-          <div class="row" style="justify-content:space-between">
-            <div class="qtitle"><a href="q.html?id=${encodeURIComponent(q.id)}">${esc(d.title)}</a></div>
-            <span class="badge">${esc(d.category||"")}</span>
-          </div>
-          <div class="qmeta">
-            <small>地域：${esc(d.region||"未設定")}</small>
-            <small>投稿者：${esc(d.displayName||"匿名")}${d.social?`（${esc(d.social)}）`:""}</small>
-            <small>共感：${d.likeCount||0}</small>
-            <small>回答：${d.answerCount||0}</small>
-          </div>
-          <div class="muted" style="margin-top:8px">${esc((d.body||"").slice(0,140))}${(d.body||"").length>140?"…":""}</div>
-          <div style="margin-top:8px">
-            ${tags.map(t=>`<span class="pill tag" data-tag="${esc(t)}">#${esc(t)}</span>`).join("")}
-          </div>
-          <div class="inline-actions">
-            <button class="btn ghost shareBtn" data-url="${location.origin + location.pathname.replace(/index\\.html$/, '')}q.html?id=${encodeURIComponent(q.id)}" style="width:auto">URLコピー</button>
-          </div>
+        <div class="miniItem">
+          <a href="q.html?id=${q.id}">${solved} ${title}</a>
+          <div class="meta">回答:${a} / 共感:${l}</div>
         </div>
       `;
-    }).join("");
-
-    document.getElementById("pageInfo").textContent = `${page} / ${maxPage}`;
-    document.getElementById("prev").disabled = page<=1;
-    document.getElementById("next").disabled = page>=maxPage;
-  }
-
-  // タグクリック → 検索欄に追加（AND検索）
-  document.addEventListener("click", (e)=>{
-    const t = e.target;
-    if(t.classList.contains("tag")){
-      const tag = t.dataset.tag || "";
-      const s = document.getElementById("search");
-      const cur = s.value.trim();
-      const next = cur ? `${cur} ${tag}` : tag;
-      s.value = next;
-      apply();
-    }
-    if(t.classList.contains("shareBtn")){
-      const url = t.dataset.url;
-      navigator.clipboard.writeText(url).then(()=>alert("URLをコピーしました")).catch(()=>alert("コピーできませんでした"));
-    }
-  });
-
-  document.getElementById("prev").addEventListener("click", ()=>{ page=Math.max(1,page-1); render(); });
-  document.getElementById("next").addEventListener("click", ()=>{ page=page+1; render(); });
-
-  ["search","cat","reg","sort"].forEach(id=>{
-    document.getElementById(id).addEventListener("input", apply);
-    document.getElementById(id).addEventListener("change", apply);
-  });
-
-  async function init(){
-    const status = document.getElementById("status");
-    status.textContent = "読み込み中…";
-
-    const cfg = await getSiteConfig().catch(()=>({maintenance:false,message:""}));
-    if(cfg.maintenance){
-      document.getElementById("maintBox").style.display = "block";
-      document.getElementById("maintMsg").textContent = cfg.message || "しばらくお待ちください。";
     }
 
-    try{
-      all = await listQuestions();
-      status.textContent = "";
-      apply();
-    }catch(e){
-      console.error(e);
-      status.textContent = "読み込みエラー：" + (e?.message || e);
-    }
-  }
+    function renderTopBoxes(){
+      const live = all.filter(q => !q.data?.deleted);
 
-  init();
-</script>
+      const popular  = [...live].sort((a,b)=>(b.data.likeCount||0)-(a.data.likeCount||0)).slice(0,5);
+      const trending = [...live].sort((a,b)=>scoreTrending(b.data)-scoreTrending(a.data)).slice(0,5);
+      const unbest   = live
+        .filter(q=>!q.data.bestAnswerId)
+        .sort((a,b)=>(b.data.createdAt?.seconds||0)-(a.data.createdAt?.seconds||0))
+        .slice(0,5);
+
+      document.getElementById("popularBox").innerHTML  = popular.length  ? popular.map(fmtMiniItem).join("")  : "まだありません";
+      document.getElementById("trendingBox").innerHTML = trending.length ? trending.map(fmtMiniItem).join("") : "まだありません";
+      document.getElementById("unbestBox").innerHTML   = unbest.length   ? unbest.map(fmtMiniItem).join("")   : "未解決がありません（すごい）";
+    }
+
+    function renderList(){
+      const kw = (document.getElementById("searchInput")?.value || "").toLowerCase().trim();
+      const mode = document.getElementById("sortMode")?.value || "like";
+
+      let arr = all.filter(q => !q.data?.deleted);
+
+      // 検索（タイトル＋本文）
+      if(kw){
+        arr = arr.filter(q=>{
+          const t = (q.data.title||"").toLowerCase();
+          const b = (q.data.body||"").toLowerCase();
+          return t.includes(kw) || b.includes(kw);
+        });
+      }
+
+      // 並び替え
+      if(mode === "like"){
+        arr.sort((a,b)=>(b.data.likeCount||0)-(a.data.likeCount||0));
+      }else if(mode === "new"){
+        arr.sort((a,b)=>(b.data.createdAt?.seconds||0)-(a.data.createdAt?.seconds||0));
+      }else if(mode === "old"){
+        arr.sort((a,b)=>(a.data.createdAt?.seconds||0)-(b.data.createdAt?.seconds||0));
+      }else if(mode === "unbest"){
+        arr = arr.filter(q=>!q.data.bestAnswerId);
+        // 未解決は新しい順にしておく
+        arr.sort((a,b)=>(b.data.createdAt?.seconds||0)-(a.data.createdAt?.seconds||0));
+      }else if(mode === "many"){
+        arr.sort((a,b)=>(b.data.answerCount||0)-(a.data.answerCount||0));
+      }else if(mode === "few"){
+        arr.sort((a,b)=>(a.data.answerCount||0)-(b.data.answerCount||0));
+      }
+
+      const box = document.getElementById("list");
+      box.innerHTML = "";
+
+      if(!arr.length){
+        box.innerHTML = `<div class="card"><div class="muted">該当する質問がありません</div></div>`;
+        return;
+      }
+
+      arr.forEach(q=>{
+        const d = q.data || {};
+        const el = document.createElement("div");
+        el.className = "card";
+        const solved = d.bestAnswerId ? `<span class="pill">🏆解決済</span>` : `<span class="pill">🟡未解決</span>`;
+        el.innerHTML = `
+          <a href="q.html?id=${q.id}" style="font-weight:800;font-size:16px">
+            ${esc(d.title||"(無題)")}
+          </a>
+          <div class="qmeta">
+            回答:${d.answerCount||0}　
+            共感:${d.likeCount||0}
+            ${solved}
+          </div>
+        `;
+        box.appendChild(el);
+      });
+    }
+
+    async function loadNoti(){
+      const box = document.getElementById("notiBox");
+      box.textContent = "読み込み中…";
+
+      let items = [];
+      try{
+        items = await listMyNotifications(30);
+      }catch(e){
+        console.error(e);
+        box.innerHTML = `<span class="muted">通知の取得に失敗しました</span>`;
+        return;
+      }
+
+      if(!items.length){
+        box.innerHTML = `<span class="muted">通知なし</span>`;
+        return;
+      }
+
+      box.innerHTML = "";
+      items.forEach(n=>{
+        const d = n.data || {};
+        const row = document.createElement("div");
+        row.style.margin = "8px 0";
+
+        const newTag = d.read ? "" : `<span class="pill new">NEW</span>`;
+        const link = d.qid ? `q.html?id=${d.qid}` : "#";
+
+        row.innerHTML = `
+          <a href="${link}">🔔 ${esc(d.message || "通知")}</a>
+          ${newTag}
+        `;
+
+        // クリックしたら既読にする（リンク遷移前に発火）
+        row.addEventListener("click", async ()=>{
+          try{ await markNotificationRead(n.id); }catch(e){ console.warn(e); }
+        });
+
+        box.appendChild(row);
+      });
+    }
+
+    async function loadAll(){
+      const res = await listQuestions();
+      all = res.filter(q => !q.data?.deleted);
+      renderTopBoxes();
+      renderList();
+      loadNoti();
+    }
+
+    window.addEventListener("DOMContentLoaded", ()=>{
+      loadAll();
+
+      document.getElementById("sortMode")?.addEventListener("change", renderList);
+      document.getElementById("searchInput")?.addEventListener("input", renderList);
+
+      document.getElementById("clearBtn")?.addEventListener("click", ()=>{
+        document.getElementById("searchInput").value = "";
+        document.getElementById("sortMode").value = "like";
+        renderList();
+      });
+
+      document.getElementById("reloadNotiBtn")?.addEventListener("click", loadNoti);
+    });
+  </script>
 </body>
 </html>
-
