@@ -1,19 +1,19 @@
 <!doctype html>
 <html lang="ja">
 <head>
-  <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-4QH9F5T9PD"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-4QH9F5T9PD');
-</script>
-
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>整形相談Q&A</title>
+
+  <!-- Google Analytics（残す） -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-4QH9F5T9PD"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-4QH9F5T9PD');
+  </script>
+
   <style>
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;margin:0;background:#f6f7fb;color:#111;}
     .wrap{max-width:980px;margin:0 auto;padding:16px;}
@@ -39,6 +39,29 @@
     .miniItem .meta{font-size:12px;color:#777;margin-top:2px}
     .list .card{margin-bottom:12px}
     .divider{height:1px;background:#e6e8ef;margin:12px 0}
+
+    /* 本文プレビュー（2〜3行） */
+    .snippet{
+      margin-top:8px;
+      color:#333;
+      font-size:14px;
+      line-height:1.45;
+      display:-webkit-box;
+      -webkit-line-clamp:3;      /* 3行まで表示 */
+      -webkit-box-orient:vertical;
+      overflow:hidden;
+      white-space:normal;
+    }
+
+    /* ページネーション */
+    .pager{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+    .pager .pages{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+    .pageBtn{
+      border:1px solid #cfd5e5;background:#fff;border-radius:10px;
+      padding:6px 10px;cursor:pointer;font-size:13px
+    }
+    .pageBtn.active{background:#111;color:#fff;border-color:#111}
+    .pageBtn:disabled{opacity:.45;cursor:not-allowed}
   </style>
 </head>
 
@@ -48,11 +71,14 @@
     <div class="topbar">
       <div class="brand">整形相談Q&A</div>
       <div class="controls">
+        <!-- ランキング画面への導線（ここが直ってる） -->
+        <!-- もしファイル名が違うなら href を合わせてね（例：leaderboard.html など） -->
+        <a class="btn ghost" href="rank.html">🏆 ランキング</a>
         <a class="btn primary" href="ask.html">＋ 質問する</a>
       </div>
     </div>
 
-    <!-- 🔔通知（indexで見る） -->
+    <!-- 🔔通知 -->
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
         <div style="font-weight:800">🔔 通知（あなた宛て）</div>
@@ -105,12 +131,31 @@
 
     <div style="height:12px"></div>
 
+    <!-- ページネーション（上） -->
+    <div class="card">
+      <div class="pager">
+        <div class="muted" id="resultInfo">読み込み中…</div>
+        <div class="pages" id="pagerTop"></div>
+      </div>
+    </div>
+
+    <div style="height:12px"></div>
+
     <!-- 質問一覧 -->
     <div id="list" class="list"></div>
 
+    <div style="height:12px"></div>
+
+    <!-- ページネーション（下） -->
+    <div class="card">
+      <div class="pager">
+        <div class="muted" id="resultInfo2"> </div>
+        <div class="pages" id="pagerBottom"></div>
+      </div>
+    </div>
+
   </div>
 
-  <!-- ✅ ここからJS（全部入り） -->
   <script type="module">
     import {
       listQuestions, esc,
@@ -118,8 +163,11 @@
     } from "./app.js";
 
     let all = [];
+    let filteredSorted = [];
 
-    // 急上昇スコア（新しさ×共感）
+    const PAGE_SIZE = 20;
+    let currentPage = 1;
+
     function scoreTrending(d){
       const like = d.likeCount || 0;
       const sec  = d.createdAt?.seconds || 0;
@@ -156,13 +204,12 @@
       document.getElementById("unbestBox").innerHTML   = unbest.length   ? unbest.map(fmtMiniItem).join("")   : "未解決がありません（すごい）";
     }
 
-    function renderList(){
+    function getFilteredSorted(){
       const kw = (document.getElementById("searchInput")?.value || "").toLowerCase().trim();
       const mode = document.getElementById("sortMode")?.value || "like";
 
       let arr = all.filter(q => !q.data?.deleted);
 
-      // 検索（タイトル＋本文）
       if(kw){
         arr = arr.filter(q=>{
           const t = (q.data.title||"").toLowerCase();
@@ -171,7 +218,6 @@
         });
       }
 
-      // 並び替え
       if(mode === "like"){
         arr.sort((a,b)=>(b.data.likeCount||0)-(a.data.likeCount||0));
       }else if(mode === "new"){
@@ -180,7 +226,6 @@
         arr.sort((a,b)=>(a.data.createdAt?.seconds||0)-(b.data.createdAt?.seconds||0));
       }else if(mode === "unbest"){
         arr = arr.filter(q=>!q.data.bestAnswerId);
-        // 未解決は新しい順にしておく
         arr.sort((a,b)=>(b.data.createdAt?.seconds||0)-(a.data.createdAt?.seconds||0));
       }else if(mode === "many"){
         arr.sort((a,b)=>(b.data.answerCount||0)-(a.data.answerCount||0));
@@ -188,23 +233,119 @@
         arr.sort((a,b)=>(a.data.answerCount||0)-(b.data.answerCount||0));
       }
 
+      return arr;
+    }
+
+    function renderPager(totalItems){
+      const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+      currentPage = Math.min(currentPage, totalPages);
+
+      const infoText = `全 ${totalItems} 件 / ${currentPage} / ${totalPages} ページ（1ページ ${PAGE_SIZE} 件）`;
+      document.getElementById("resultInfo").textContent = infoText;
+      document.getElementById("resultInfo2").textContent = infoText;
+
+      const make = (rootId)=>{
+        const root = document.getElementById(rootId);
+        root.innerHTML = "";
+
+        const prev = document.createElement("button");
+        prev.className = "pageBtn";
+        prev.textContent = "← 前へ";
+        prev.disabled = currentPage <= 1;
+        prev.onclick = ()=>{ currentPage--; renderList(); };
+        root.appendChild(prev);
+
+        // ページ番号（多すぎると邪魔なので最大7個表示）
+        const totalPagesLocal = totalPages;
+        const windowSize = 7;
+        let start = Math.max(1, currentPage - Math.floor(windowSize/2));
+        let end = Math.min(totalPagesLocal, start + windowSize - 1);
+        start = Math.max(1, end - windowSize + 1);
+
+        if(start > 1){
+          root.appendChild(pageBtn(1));
+          if(start > 2){
+            const dots = document.createElement("span");
+            dots.className = "muted";
+            dots.textContent = "…";
+            root.appendChild(dots);
+          }
+        }
+
+        for(let p=start; p<=end; p++){
+          root.appendChild(pageBtn(p));
+        }
+
+        if(end < totalPagesLocal){
+          if(end < totalPagesLocal - 1){
+            const dots = document.createElement("span");
+            dots.className = "muted";
+            dots.textContent = "…";
+            root.appendChild(dots);
+          }
+          root.appendChild(pageBtn(totalPagesLocal));
+        }
+
+        const next = document.createElement("button");
+        next.className = "pageBtn";
+        next.textContent = "次へ →";
+        next.disabled = currentPage >= totalPagesLocal;
+        next.onclick = ()=>{ currentPage++; renderList(); };
+        root.appendChild(next);
+      };
+
+      const pageBtn = (p)=>{
+        const b = document.createElement("button");
+        b.className = "pageBtn" + (p===currentPage ? " active" : "");
+        b.textContent = String(p);
+        b.onclick = ()=>{ currentPage = p; renderList(); window.scrollTo({top:0, behavior:"smooth"}); };
+        return b;
+      };
+
+      make("pagerTop");
+      make("pagerBottom");
+    }
+
+    function renderList(){
+      filteredSorted = getFilteredSorted();
+
+      const total = filteredSorted.length;
+      const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+      currentPage = Math.max(1, Math.min(currentPage, totalPages));
+
+      renderPager(total);
+
+      const start = (currentPage - 1) * PAGE_SIZE;
+      const end = start + PAGE_SIZE;
+      const pageItems = filteredSorted.slice(start, end);
+
       const box = document.getElementById("list");
       box.innerHTML = "";
 
-      if(!arr.length){
+      if(!pageItems.length){
         box.innerHTML = `<div class="card"><div class="muted">該当する質問がありません</div></div>`;
         return;
       }
 
-      arr.forEach(q=>{
+      pageItems.forEach(q=>{
         const d = q.data || {};
         const el = document.createElement("div");
         el.className = "card";
-        const solved = d.bestAnswerId ? `<span class="pill">🏆解決済</span>` : `<span class="pill">🟡未解決</span>`;
+
+        const solved = d.bestAnswerId
+          ? `<span class="pill">🏆解決済</span>`
+          : `<span class="pill">🟡未解決</span>`;
+
+        const snippet = esc((d.body || "").trim());
+
         el.innerHTML = `
           <a href="q.html?id=${q.id}" style="font-weight:800;font-size:16px">
             ${esc(d.title||"(無題)")}
           </a>
+
+          <!-- 本文プレビュー（2〜3行） -->
+          <div class="snippet">${snippet || "<span class='muted'>（本文なし）</span>"}</div>
+
           <div class="qmeta">
             回答:${d.answerCount||0}　
             共感:${d.likeCount||0}
@@ -247,7 +388,6 @@
           ${newTag}
         `;
 
-        // クリックしたら既読にする（リンク遷移前に発火）
         row.addEventListener("click", async ()=>{
           try{ await markNotificationRead(n.id); }catch(e){ console.warn(e); }
         });
@@ -259,20 +399,35 @@
     async function loadAll(){
       const res = await listQuestions();
       all = res.filter(q => !q.data?.deleted);
+
+      // 上部3BOXは全体から作る（一覧の絞り込みとは独立）
       renderTopBoxes();
+
+      // 初期表示：1ページ目
+      currentPage = 1;
       renderList();
+
+      // 通知
       loadNoti();
     }
 
     window.addEventListener("DOMContentLoaded", ()=>{
       loadAll();
 
-      document.getElementById("sortMode")?.addEventListener("change", renderList);
-      document.getElementById("searchInput")?.addEventListener("input", renderList);
+      document.getElementById("sortMode")?.addEventListener("change", ()=>{
+        currentPage = 1;
+        renderList();
+      });
+
+      document.getElementById("searchInput")?.addEventListener("input", ()=>{
+        currentPage = 1;
+        renderList();
+      });
 
       document.getElementById("clearBtn")?.addEventListener("click", ()=>{
         document.getElementById("searchInput").value = "";
         document.getElementById("sortMode").value = "like";
+        currentPage = 1;
         renderList();
       });
 
