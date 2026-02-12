@@ -1,25 +1,29 @@
 <!doctype html>
 <html lang="ja">
 <head>
-  <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-4QH9F5T9PD"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-4QH9F5T9PD');
-</script>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>質問する | 整形相談室</title>
   <link rel="stylesheet" href="style.css">
+
+  <!-- Google tag (gtag.js) ※すでに入れてるならそのまま -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-4QH9F5T9PD"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-4QH9F5T9PD');
+  </script>
 </head>
+
 <body>
 <header>
   <div class="wrap">
     <h1>質問する</h1>
-    <nav><a href="index.html">一覧</a></nav>
+    <nav>
+      <a href="index.html">一覧</a>
+      <a href="rank.html">ランキング</a>
+    </nav>
   </div>
 </header>
 
@@ -32,94 +36,178 @@
   </div>
 
   <div class="card">
-    <div class="notice">
-      <b>注意：</b>医師名・店舗の詳細・個人情報は書かない。断定や誹謗中傷は避けて「不安/疑問」の形に。<br>
-      NG例：<span class="kbd">詐欺</span> <span class="kbd">医療ミス</span> <span class="kbd">潰れろ</span>
+    <!-- ここが「カード内」＝この枠の中 -->
+    <div class="row" style="justify-content:space-between; align-items:center">
+      <div class="muted">ログインは任意。質問だけならこのままでOK。</div>
+      <button id="loginBtn" class="btn ghost" style="width:auto">Googleでログイン（任意）</button>
     </div>
 
+    <hr style="margin:12px 0">
+
     <label>表示名（任意）</label>
-    <input id="displayName" placeholder="例：あや / 匿名希望">
+    <input id="displayName" placeholder="例：匿名 / 学生 / 経験者">
 
     <label>SNS（任意）</label>
-    <input id="social" placeholder="例：X @xxxx / 空欄OK">
+    <input id="social" placeholder="例：X @xxxx（宣伝したい人用）">
 
     <div class="grid">
       <div>
-        <label>カテゴリ</label>
+        <label>カテゴリ（任意）</label>
         <select id="category">
-          <option>二重</option><option>鼻</option><option>輪郭</option><option>目元（クマ等）</option>
-          <option>美容皮膚</option><option>脱毛</option><option>その他</option>
+          <option value="">未設定</option>
+          <option>二重（埋没/切開）</option>
+          <option>鼻</option>
+          <option>輪郭</option>
+          <option>脂肪吸引</option>
+          <option>ヒアルロン酸/ボトックス</option>
+          <option>肌（美容皮膚科）</option>
+          <option>その他</option>
         </select>
       </div>
+
       <div>
-        <label>地域</label>
+        <label>地域（任意）</label>
         <select id="region">
-          <option>未設定</option><option>東京</option><option>神奈川</option><option>埼玉</option><option>千葉</option>
-          <option>大阪</option><option>その他</option>
+          <option value="">未設定</option>
+          <option>東京</option>
+          <option>関東（東京以外）</option>
+          <option>関西</option>
+          <option>中部</option>
+          <option>北海道/東北</option>
+          <option>中国/四国</option>
+          <option>九州/沖縄</option>
+          <option>韓国</option>
+          <option>その他</option>
         </select>
       </div>
     </div>
 
+    <label>タグ（任意 / スペース区切り）</label>
+    <input id="tags" placeholder="例：埋没 ダウンタイム 親バレ 学生">
+
     <label>タイトル（必須）</label>
-    <input id="title" placeholder="例：埋没って取れやすい？ダウンタイムどれくらい？">
+    <input id="title" placeholder="例：埋没って何年もつ？取れた人いる？">
 
     <label>本文（必須）</label>
-    <textarea id="body" placeholder="状況・不安・知りたいことを具体的に。"></textarea>
+    <textarea id="body" placeholder="状況・不安・聞きたいことを2〜5行くらいでOK"></textarea>
 
-    <label>タグ（任意・カンマ区切り）</label>
-    <input id="tags" placeholder="例：埋没, ダウンタイム, 学生, 親バレ">
-
-    <div class="row" style="margin-top:12px">
-      <button id="btn" class="btn">投稿する</button>
+    <div class="row" style="margin-top:10px; justify-content:space-between; gap:10px; flex-wrap:wrap">
+      <button id="postBtn" class="btn" style="width:auto">投稿する</button>
       <div id="status" class="muted"></div>
+    </div>
+
+    <div class="notice" style="margin-top:12px">
+      <b>注意：</b>
+      断定・誹謗中傷・個人/医師特定は避けてね。<br>
+      このサイトは体験・感想の共有の場で、医療行為の断定はできません。
     </div>
   </div>
 </main>
 
 <script type="module">
-  import { createQuestion, containsDanger, getSiteConfig } from "./app.js";
+  import {
+    ensureAnonAuth,
+    optionalGoogleLogin,
+    createQuestion,
+    getSiteConfig,
+    containsDanger
+  } from "./app.js";
+
+  const el = (id) => document.getElementById(id);
+
+  let maintenance = false;
+
+  function parseTags(str){
+    // スペース区切りタグ：重複削除、最大12個くらい
+    const raw = (str || "")
+      .split(/\s+/)
+      .map(s => s.trim())
+      .filter(Boolean);
+    const uniq = [];
+    for(const t of raw){
+      if(!uniq.includes(t)) uniq.push(t);
+      if(uniq.length >= 12) break;
+    }
+    return uniq;
+  }
+
+  function buildSearchText({title, body, tags, category, region}){
+    // AND検索の材料になる「検索用のまとめ文字列」
+    const parts = [title, body, category, region, ...(tags||[])].filter(Boolean);
+    return parts.join(" ").toLowerCase();
+  }
 
   async function init(){
+    await ensureAnonAuth();
+
     const cfg = await getSiteConfig().catch(()=>({maintenance:false,message:""}));
-    if(cfg.maintenance){
-      document.getElementById("maintBox").style.display = "block";
-      document.getElementById("maintMsg").textContent = cfg.message || "しばらくお待ちください。";
-      document.getElementById("btn").disabled = true;
+    maintenance = !!cfg.maintenance;
+
+    if(maintenance){
+      el("maintBox").style.display = "block";
+      el("maintMsg").textContent = cfg.message || "しばらくお待ちください。";
+      el("postBtn").disabled = true;
     }
   }
 
-  document.getElementById("btn").addEventListener("click", async ()=>{
-    const btn = document.getElementById("btn");
-    const status = document.getElementById("status");
+  // 任意ログイン
+  el("loginBtn").addEventListener("click", async ()=>{
+    const r = await optionalGoogleLogin();
+    if(r.ok) alert("ログインしました（任意）");
+    else alert("ログインできませんでした。\n" + (r.error || ""));
+  });
+
+  // 投稿
+  el("postBtn").addEventListener("click", async ()=>{
+    if(maintenance) return;
+
+    const status = el("status");
     status.textContent = "";
 
-    const displayName = document.getElementById("displayName").value.trim();
-    const social = document.getElementById("social").value.trim();
-    const category = document.getElementById("category").value;
-    const region = document.getElementById("region").value;
-    const title = document.getElementById("title").value.trim();
-    const body = document.getElementById("body").value.trim();
-    const tagsRaw = document.getElementById("tags").value.trim();
+    const displayName = el("displayName").value.trim();
+    const social = el("social").value.trim();
+    const category = el("category").value.trim();
+    const region = el("region").value.trim();
+    const tags = parseTags(el("tags").value);
+    const title = el("title").value.trim();
+    const body = el("body").value.trim();
 
-    if(!title || !body){ alert("タイトルと本文は必須です"); return; }
-    if(containsDanger(title+" "+body+" "+tagsRaw)){
-      alert("攻撃的・断定的な表現が含まれる可能性があります。言い回しを柔らかくしてください。");
+    if(!title || !body){
+      alert("タイトルと本文は必須です");
       return;
     }
 
-    const tags = tagsRaw ? tagsRaw.split(",").map(t=>t.trim()).filter(Boolean) : [];
+    // 危険ワード警告（止めはしないが、警告→OKなら投稿）
+    const dangerText = `${title}\n${body}\n${tags.join(" ")}`;
+    if(containsDanger(dangerText)){
+      const ok = confirm("攻撃的・断定的に受け取られる表現が含まれる可能性があります。\n投稿前に言い回しを「私の場合は〜」「〜と感じた」に寄せるのがおすすめ。\n\nこのまま投稿しますか？");
+      if(!ok) return;
+    }
+
+    status.textContent = "投稿中…";
+
+    const searchText = buildSearchText({title, body, tags, category, region});
 
     try{
-      btn.disabled = true;
-      status.textContent = "送信中…";
-      const ref = await createQuestion({ displayName, social, category, region, title, body, tags });
+      const ref = await createQuestion({
+        displayName,
+        social,
+        category,
+        region,
+        tags,
+        title,
+        body,
+        searchText
+      });
+
+      status.textContent = "投稿しました。移動中…";
+
+      // 質問詳細へ
       location.href = `q.html?id=${encodeURIComponent(ref.id)}`;
     }catch(e){
       console.error(e);
-      alert("投稿できませんでした。Firestoreルール/匿名ログイン設定を確認してください。");
-      status.textContent = "エラー：" + (e?.message || e);
-    }finally{
-      btn.disabled = false;
+      status.textContent = "投稿に失敗しました。時間をおいて再試行してください。";
+      alert("投稿に失敗しました（Firestore/ルール/ログイン設定を確認）");
     }
   });
 

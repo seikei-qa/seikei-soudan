@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ランキング | 整形相談室</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>ランキング</h1>
+    <nav>
+      <a href="index.html">一覧</a>
+      <a href="ask.html">質問する</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="card">
+    <div class="notice">
+      <b>ランキングについて：</b>
+      ベスト回答数 / 参考になった数 / 回答数を集計しています。<br>
+      ※匿名のままでも参加できますが、端末変更などでIDが変わることがあります。ガチ勢はGoogleログイン推奨。
+    </div>
+
+    <div class="grid" style="margin-top:12px">
+      <div>
+        <label>集計</label>
+        <select id="mode">
+          <option value="best" selected>ベスト回答数</option>
+          <option value="help">参考になった合計</option>
+          <option value="ans">回答数</option>
+        </select>
+      </div>
+      <div>
+        <label>サンプル数（直近回答から）</label>
+        <select id="sample">
+          <option value="200">200</option>
+          <option value="500" selected>500</option>
+          <option value="1000">1000</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="status" class="muted" style="margin-top:10px">読み込み中…</div>
+    <div id="list" style="margin-top:10px"></div>
+  </div>
+</main>
+
+<script type="module">
+  import { getLeaderboardSample, esc } from "./app.js";
+
+  function renderTable(rows, mode){
+    const label = mode==="best" ? "ベスト" : mode==="help" ? "参考合計" : "回答数";
+    return `
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr>
+            <th style="text-align:left;border-bottom:1px solid #eee;padding:8px">順位</th>
+            <th style="text-align:left;border-bottom:1px solid #eee;padding:8px">ユーザーID（簡略）</th>
+            <th style="text-align:right;border-bottom:1px solid #eee;padding:8px">${label}</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((r,i)=>`
+            <tr>
+              <td style="padding:8px;border-bottom:1px solid #f1f1f1">${i+1}</td>
+              <td style="padding:8px;border-bottom:1px solid #f1f1f1"><span class="kbd">${esc(r.uid.slice(0,10))}</span></td>
+              <td style="padding:8px;border-bottom:1px solid #f1f1f1;text-align:right"><b>${r.value}</b></td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  }
+
+  async function load(){
+    const status = document.getElementById("status");
+    const mode = document.getElementById("mode").value;
+    const sample = Number(document.getElementById("sample").value);
+
+    status.textContent = "集計中…";
+    const answers = await getLeaderboardSample(sample);
+
+    // uidごとに集計
+    const map = new Map();
+    for(const a of answers){
+      const d = a.data || {};
+      if(d.deleted) continue;
+      const uid = d.ownerUid;
+      if(!uid) continue;
+
+      const cur = map.get(uid) || { best:0, help:0, ans:0 };
+      cur.ans += 1;
+      cur.help += (d.helpfulCount || 0);
+      if(d.best) cur.best += 1;
+      map.set(uid, cur);
+    }
+
+    const rows = [...map.entries()].map(([uid,v])=>{
+      const value = mode==="best" ? v.best : mode==="help" ? v.help : v.ans;
+      return { uid, value };
+    }).filter(r=>r.value>0).sort((a,b)=>b.value-a.value).slice(0,50);
+
+    status.textContent = rows.length ? "" : "まだデータがありません（回答が増えるとランキングが出ます）";
+    document.getElementById("list").innerHTML = rows.length ? renderTable(rows, mode) : "";
+  }
+
+  ["mode","sample"].forEach(id=>document.getElementById(id).addEventListener("change", load));
+  load();
+</script>
+</body>
+</html>
