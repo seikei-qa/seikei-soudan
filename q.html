@@ -18,6 +18,13 @@
 </header>
 
 <main>
+  <div id="maintBox" class="card" style="display:none">
+    <div class="notice">
+      <b>メンテナンス中：</b><span id="maintMsg"></span><br>
+      現在「投稿」は停止中です（閲覧は可能）。
+    </div>
+  </div>
+
   <div class="card">
     <div id="status" class="muted">読み込み中…</div>
 
@@ -33,11 +40,10 @@
     <div id="tags" style="margin-top:10px"></div>
     <div id="body" style="margin-top:12px;white-space:pre-wrap"></div>
 
-    <hr>
-
-    <div class="row">
+    <div class="inline-actions">
+      <button id="copyUrl" class="btn ghost" style="width:auto">URLコピー</button>
       <button id="likeBtn" class="btn" style="width:auto">共感</button>
-      <div class="muted">※もう一回押すと解除</div>
+      <button id="reportQ" class="btn danger" style="width:auto">通報</button>
     </div>
 
     <div id="ownerActions" style="display:none;margin-top:12px">
@@ -49,7 +55,7 @@
       <textarea id="eBody"></textarea>
       <div class="row" style="margin-top:10px">
         <button id="saveQ" class="btn" style="width:auto">保存</button>
-        <button id="delQ" class="btn" style="width:auto;background:#b00020">削除</button>
+        <button id="delQ" class="btn danger" style="width:auto">削除（ソフト削除）</button>
         <div id="qMsg" class="muted"></div>
       </div>
     </div>
@@ -77,8 +83,8 @@
     <div class="row" style="justify-content:space-between">
       <h3 style="margin:0">回答一覧</h3>
       <select id="ansSort" style="width:auto">
-        <option value="new">古い順</option>
-        <option value="help">参考になったが多い順</option>
+        <option value="help" selected>参考になったが多い順</option>
+        <option value="old">古い順</option>
       </select>
     </div>
     <div id="answers"></div>
@@ -91,20 +97,32 @@
     getQuestion, listAnswers, addAnswer,
     toggleLikeQuestion, isLiked,
     toggleHelpful, isHelpful,
-    updateQuestion, deleteQuestion,
-    updateAnswer, deleteAnswer
+    updateQuestion, softDeleteQuestion,
+    updateAnswer, softDeleteAnswer,
+    createReport, copyToClipboard,
+    getSiteConfig
   } from "./app.js";
 
   const params = new URLSearchParams(location.search);
   const id = params.get("id");
 
-  let qData = null; // current question
+  let qData = null;
   let answersCache = [];
+  let maintenance = false;
+
+  function siteUrl(){
+    return location.href;
+  }
+
+  function renderTags(tags){
+    const el = document.getElementById("tags");
+    el.innerHTML = (tags||[]).map(t=>`<span class="pill tag" data-tag="${esc(t)}">#${esc(t)}</span>`).join("");
+  }
 
   function sortAnswers(list, mode){
-    const cp = list.slice();
+    const cp = list.slice().filter(a => !a.data?.deleted);
     if(mode==="help") return cp.sort((a,b)=> (b.data.helpfulCount||0) - (a.data.helpfulCount||0));
-    return cp; // createdAt asc のまま
+    return cp; // old（createdAt asc のまま）
   }
 
   async function renderAnswers(){
@@ -117,11 +135,9 @@
       return;
     }
 
-    // 自分の回答だけ編集/削除ボタンを出す
     el.innerHTML = await Promise.all(list.map(async (a)=>{
       const d=a.data;
       const mine = (d.ownerUid && currentUid && d.ownerUid === currentUid);
-
       const helpful = await isHelpful(id, a.id).catch(()=>false);
 
       return `
@@ -133,11 +149,14 @@
 
           <div class="muted" style="margin-top:6px;white-space:pre-wrap">${esc(d.body || "")}</div>
 
-          <div class="row" style="margin-top:10px">
-            <button class="btn helpfulBtn" data-aid="${a.id}" style="width:auto">${helpful ? "参考になった（解除）" : "参考になった"}</button>
+          <div class="inline-actions">
+            <button class="btn helpfulBtn" data-aid="${a.id}" style="width:auto" ${maintenance ? "disabled" : ""}>
+              ${helpful ? "参考になった（解除）" : "参考になった"}
+            </button>
+            <button class="btn ghost reportA" data-aid="${a.id}" style="width:auto">通報</button>
             ${mine ? `
-              <button class="btn editA" data-aid="${a.id}" style="width:auto;background:#444">編集</button>
-              <button class="btn delA" data-aid="${a.id}" style="width:auto;background:#b00020">削除</button>
+              <button class="btn ghost editA" data-aid="${a.id}" style="width:auto">編集</button>
+              <button class="btn danger delA" data-aid="${a.id}" style="width:auto">削除（ソフト削除）</button>
             ` : ""}
           </div>
 
@@ -145,7 +164,7 @@
             <label>回答を編集</label>
             <textarea class="editText">${esc(d.body||"")}</textarea>
             <div class="row" style="margin-top:8px">
-              <button class="btn saveA" data-aid="${a.id}" style="width:auto">保存</button>
+              <button class="btn saveA" data-aid="${a.id}" style="width:auto" ${maintenance ? "disabled" : ""}>保存</button>
               <div class="muted msg"></div>
             </div>
           </div>
@@ -161,9 +180,25 @@
     status.textContent = "読み込み中…";
     await ensureAnonAuth();
 
+    const cfg = await getSiteConfig().catch(()=>({maintenance:false,message:""}));
+    maintenance = !!cfg.maintenance;
+    if(maintenance){
+      document.getElementById("maintBox").style.display = "block";
+      document.getElementById("maintMsg").textContent = cfg.message || "しばらくお待ちください。";
+      document.getElementById("aBtn").disabled = true;
+      document.getElementById("likeBtn").disabled = true;
+    }
+
     const q = await getQuestion(id);
     if(!q){ status.textContent = "質問が見つかりません"; return; }
     qData = q.data;
+
+    if(qData.deleted){
+      status.textContent = "この質問は削除されました。";
+      document.getElementById("title").textContent = "(削除済み)";
+      document.getElementById("body").textContent = "";
+      return;
+    }
 
     document.getElementById("title").textContent = qData.title || "";
     document.getElementById("cat").textContent = "カテゴリ：" + (qData.category || "未設定");
@@ -172,34 +207,42 @@
     document.getElementById("counts").textContent = `共感：${qData.likeCount||0}｜回答：${qData.answerCount||0}`;
     document.getElementById("body").textContent = qData.body || "";
 
-    const tags = Array.isArray(qData.tags) ? qData.tags : [];
-    document.getElementById("tags").innerHTML = tags.map(t=>`<span class="pill">#${esc(t)}</span>`).join("");
+    renderTags(Array.isArray(qData.tags) ? qData.tags : []);
 
-    // Like状態
     const liked = await isLiked(id).catch(()=>false);
     document.getElementById("likeBtn").textContent = liked ? "共感（解除）" : "共感";
 
-    // ownerなら編集欄を出す
     if(qData.ownerUid && currentUid && qData.ownerUid === currentUid){
       document.getElementById("ownerActions").style.display = "block";
       document.getElementById("eTitle").value = qData.title || "";
       document.getElementById("eBody").value = qData.body || "";
+      if(maintenance){
+        document.getElementById("saveQ").disabled = true;
+        document.getElementById("delQ").disabled = true;
+      }
     }
 
-    // answers
     answersCache = await listAnswers(id);
     status.textContent = "";
     await renderAnswers();
   }
 
+  // URLコピー
+  document.getElementById("copyUrl").addEventListener("click", async ()=>{
+    await copyToClipboard(siteUrl());
+    alert("URLをコピーしました");
+  });
+
   // 共感
   document.getElementById("likeBtn").addEventListener("click", async ()=>{
+    if(maintenance) return;
     await toggleLikeQuestion(id);
     await load();
   });
 
   // 質問編集
   document.getElementById("saveQ")?.addEventListener("click", async ()=>{
+    if(maintenance) return;
     const msg = document.getElementById("qMsg");
     const title = document.getElementById("eTitle").value.trim();
     const body = document.getElementById("eBody").value.trim();
@@ -211,15 +254,25 @@
     await load();
   });
 
-  // 質問削除
+  // 質問削除（ソフト）
   document.getElementById("delQ")?.addEventListener("click", async ()=>{
-    if(!confirm("この質問を削除します。よろしいですか？")) return;
-    await deleteQuestion(id);
+    if(maintenance) return;
+    if(!confirm("この質問を削除します（ソフト削除）。よろしいですか？")) return;
+    await softDeleteQuestion(id);
     location.href = "index.html";
+  });
+
+  // 質問通報
+  document.getElementById("reportQ").addEventListener("click", async ()=>{
+    const reason = prompt("通報理由（例：個人情報/誹謗中傷/医師名や店舗特定/スパム 等）");
+    if(!reason) return;
+    await createReport({ targetType:"question", qid:id, reason, pageUrl: siteUrl() });
+    alert("通報しました。ありがとうございます。");
   });
 
   // 回答投稿
   document.getElementById("aBtn").addEventListener("click", async ()=>{
+    if(maintenance) return;
     const st = document.getElementById("aStatus");
     const displayName = document.getElementById("aName").value.trim();
     const social = document.getElementById("aSocial").value.trim();
@@ -237,15 +290,31 @@
   // 回答並び替え
   document.getElementById("ansSort").addEventListener("change", renderAnswers);
 
-  // 回答のボタン群（イベント委任）
+  // タグクリック → 一覧検索へ
   document.addEventListener("click", async (e)=>{
     const t = e.target;
 
+    // タグ
+    if(t.classList.contains("tag")){
+      const tag = t.dataset.tag || "";
+      location.href = `index.html?search=${encodeURIComponent(tag)}`;
+    }
+
     // 参考になった
     if(t.classList.contains("helpfulBtn")){
+      if(maintenance) return;
       const aid = t.dataset.aid;
       await toggleHelpful(id, aid);
       await load();
+    }
+
+    // 回答通報
+    if(t.classList.contains("reportA")){
+      const aid = t.dataset.aid;
+      const reason = prompt("通報理由（例：個人情報/誹謗中傷/医師名や店舗特定/スパム 等）");
+      if(!reason) return;
+      await createReport({ targetType:"answer", qid:id, aid, reason, pageUrl: siteUrl() });
+      alert("通報しました。ありがとうございます。");
     }
 
     // 編集表示
@@ -255,16 +324,18 @@
       if(box) box.style.display = (box.style.display==="none" ? "block" : "none");
     }
 
-    // 回答削除
+    // 回答削除（ソフト）
     if(t.classList.contains("delA")){
+      if(maintenance) return;
       const aid = t.dataset.aid;
-      if(!confirm("この回答を削除します。よろしいですか？")) return;
-      await deleteAnswer(id, aid);
+      if(!confirm("この回答を削除します（ソフト削除）。よろしいですか？")) return;
+      await softDeleteAnswer(id, aid);
       await load();
     }
 
     // 回答保存
     if(t.classList.contains("saveA")){
+      if(maintenance) return;
       const aid = t.dataset.aid;
       const wrap = document.querySelector(`.qitem[data-aid="${aid}"]`);
       const ta = wrap?.querySelector(".editText");
@@ -278,6 +349,12 @@
       await load();
     }
   });
+
+  // indexから ?search= を受け取って反映（タグ→検索連携）
+  const qsearch = new URLSearchParams(location.search).get("search");
+  if(qsearch){
+    // そのまま一覧に飛ぶ方式にしたので、ここでは何もしない（互換用）
+  }
 
   load();
 </script>

@@ -18,8 +18,20 @@
 </header>
 
 <main>
+  <div id="maintBox" class="card" style="display:none">
+    <div class="notice">
+      <b>メンテナンス中：</b><span id="maintMsg"></span><br>
+      現在「投稿」は停止中です（閲覧は可能）。
+    </div>
+  </div>
+
   <div class="card">
-    <div class="muted">スペース区切り＝掛け算検索（AND）</div>
+    <div class="notice">
+      <b>注意：</b>医師名・店舗の詳細・個人情報は書かない。断定や誹謗中傷ではなく「不安/疑問」の形に。<br>
+      NG例：<span class="kbd">詐欺</span> <span class="kbd">医療ミス</span> <span class="kbd">潰れろ</span> などの断定・攻撃ワード
+    </div>
+
+    <div class="muted" style="margin-top:10px">スペース区切り＝掛け算検索（AND）。タグをクリックすると検索に追加。</div>
 
     <div class="grid" style="margin-top:12px">
       <div>
@@ -29,8 +41,8 @@
       <div>
         <label>並び替え</label>
         <select id="sort">
+          <option value="like" selected>共感が多い順（おすすめ）</option>
           <option value="new">新しい順</option>
-          <option value="like">共感が多い順</option>
           <option value="ans">回答が多い順</option>
           <option value="old">古い順</option>
         </select>
@@ -58,13 +70,22 @@
 
     <div id="status" class="muted" style="margin-top:10px"></div>
     <div id="list" style="margin-top:10px"></div>
+
+    <div class="pager">
+      <button id="prev">前へ</button>
+      <span class="muted" id="pageInfo"></span>
+      <button id="next">次へ</button>
+    </div>
   </div>
 </main>
 
 <script type="module">
-  import { listQuestions, tokenize, andMatch, esc } from "./app.js";
+  import { listQuestions, tokenize, andMatch, esc, getSiteConfig } from "./app.js";
 
+  const PAGE_SIZE = 20;
+  let page = 1;
   let all = [];
+  let filtered = [];
 
   function buildHay(q){
     const d=q.data;
@@ -80,28 +101,44 @@
     return cp; // new（createdAt descのまま）
   }
 
-  function render(){
+  function apply(){
     const tokens = tokenize(document.getElementById("search").value);
     const cat = document.getElementById("cat").value;
     const reg = document.getElementById("reg").value;
     const sort = document.getElementById("sort").value;
 
-    let list = all.filter(q=>{
-      const d=q.data;
-      if(cat && d.category !== cat) return false;
-      if(reg && d.region !== reg) return false;
-      return andMatch(buildHay(q), tokens);
-    });
+    filtered = all
+      .filter(q => !q.data?.deleted) // ソフト削除は表示しない
+      .filter(q=>{
+        const d=q.data;
+        if(cat && d.category !== cat) return false;
+        if(reg && d.region !== reg) return false;
+        return andMatch(buildHay(q), tokens);
+      });
 
-    list = sortList(list, sort);
+    filtered = sortList(filtered, sort);
+    page = 1;
+    render();
+  }
 
+  function render(){
     const el = document.getElementById("list");
-    if(list.length===0){
+    const total = filtered.length;
+    if(total===0){
       el.innerHTML = `<div class="muted">該当する質問がありません。</div>`;
+      document.getElementById("pageInfo").textContent = "";
+      document.getElementById("prev").disabled = true;
+      document.getElementById("next").disabled = true;
       return;
     }
 
-    el.innerHTML = list.map(q=>{
+    const maxPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    if(page > maxPage) page = maxPage;
+
+    const start = (page-1)*PAGE_SIZE;
+    const view = filtered.slice(start, start+PAGE_SIZE);
+
+    el.innerHTML = view.map(q=>{
       const d=q.data;
       const tags = Array.isArray(d.tags) ? d.tags : [];
       return `
@@ -118,32 +155,67 @@
           </div>
           <div class="muted" style="margin-top:8px">${esc((d.body||"").slice(0,140))}${(d.body||"").length>140?"…":""}</div>
           <div style="margin-top:8px">
-            ${tags.map(t=>`<span class="pill">#${esc(t)}</span>`).join("")}
+            ${tags.map(t=>`<span class="pill tag" data-tag="${esc(t)}">#${esc(t)}</span>`).join("")}
+          </div>
+          <div class="inline-actions">
+            <button class="btn ghost shareBtn" data-url="${location.origin + location.pathname.replace(/index\\.html$/, '')}q.html?id=${encodeURIComponent(q.id)}" style="width:auto">URLコピー</button>
           </div>
         </div>
       `;
     }).join("");
+
+    document.getElementById("pageInfo").textContent = `${page} / ${maxPage}`;
+    document.getElementById("prev").disabled = page<=1;
+    document.getElementById("next").disabled = page>=maxPage;
   }
+
+  // タグクリック → 検索欄に追加（AND検索）
+  document.addEventListener("click", (e)=>{
+    const t = e.target;
+    if(t.classList.contains("tag")){
+      const tag = t.dataset.tag || "";
+      const s = document.getElementById("search");
+      const cur = s.value.trim();
+      const next = cur ? `${cur} ${tag}` : tag;
+      s.value = next;
+      apply();
+    }
+    if(t.classList.contains("shareBtn")){
+      const url = t.dataset.url;
+      navigator.clipboard.writeText(url).then(()=>alert("URLをコピーしました")).catch(()=>alert("コピーできませんでした"));
+    }
+  });
+
+  document.getElementById("prev").addEventListener("click", ()=>{ page=Math.max(1,page-1); render(); });
+  document.getElementById("next").addEventListener("click", ()=>{ page=page+1; render(); });
+
+  ["search","cat","reg","sort"].forEach(id=>{
+    document.getElementById(id).addEventListener("input", apply);
+    document.getElementById(id).addEventListener("change", apply);
+  });
 
   async function init(){
     const status = document.getElementById("status");
     status.textContent = "読み込み中…";
+
+    const cfg = await getSiteConfig().catch(()=>({maintenance:false,message:""}));
+    if(cfg.maintenance){
+      document.getElementById("maintBox").style.display = "block";
+      document.getElementById("maintMsg").textContent = cfg.message || "しばらくお待ちください。";
+    }
+
     try{
       all = await listQuestions();
       status.textContent = "";
-      render();
+      apply();
     }catch(e){
       console.error(e);
       status.textContent = "読み込みエラー：" + (e?.message || e);
     }
   }
 
-  ["search","cat","reg","sort"].forEach(id=>{
-    document.getElementById(id).addEventListener("input", render);
-    document.getElementById(id).addEventListener("change", render);
-  });
-
   init();
 </script>
 </body>
 </html>
+

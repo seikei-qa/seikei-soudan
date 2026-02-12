@@ -12,7 +12,7 @@ const firebaseConfig = {
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getFirestore, collection, addDoc, getDocs, query, orderBy, doc, getDoc,
-  serverTimestamp, runTransaction, setDoc, deleteDoc, updateDoc, increment
+  serverTimestamp, runTransaction, updateDoc, increment, setDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
@@ -36,7 +36,7 @@ export function andMatch(hay, tokens){
   return tokens.every(t => h.includes(t));
 }
 export function containsDanger(text){
-  const danger = ["詐欺","医療ミス","違法","殺す","死ね","最悪","悪徳","ぼったくり","金返せ","訴える","犯罪","逮捕"];
+  const danger = ["詐欺","医療ミス","違法","殺す","死ね","最悪","悪徳","ぼったくり","金返せ","訴える","犯罪","逮捕","潰れろ"];
   const s = String(text || "");
   return danger.some(w => s.includes(w));
 }
@@ -59,11 +59,30 @@ export async function ensureAnonAuth(){
   });
 }
 
+// ===== メンテナンス設定 =====
+// settings/site { maintenance: true/false, message: "..." }
+let _siteCache = null;
+export async function getSiteConfig(){
+  await ensureAnonAuth();
+  if(_siteCache) return _siteCache;
+  const ref = doc(db, "settings", "site");
+  const snap = await getDoc(ref);
+  if(!snap.exists()){
+    _siteCache = { maintenance:false, message:"" };
+    return _siteCache;
+  }
+  const d = snap.data() || {};
+  _siteCache = { maintenance: !!d.maintenance, message: d.message || "" };
+  return _siteCache;
+}
+
 // ===== 質問 =====
 export async function createQuestion(payload){
   await ensureAnonAuth();
   payload.ownerUid = currentUid;
   payload.createdAt = serverTimestamp();
+  payload.updatedAt = null;
+  payload.deleted = false;
   payload.likeCount = 0;
   payload.answerCount = 0;
   return addDoc(collection(db, "questions"), payload);
@@ -88,15 +107,14 @@ export async function getQuestion(qid){
 
 export async function updateQuestion(qid, patch){
   await ensureAnonAuth();
-  const ref = doc(db,"questions",qid);
   patch.updatedAt = serverTimestamp();
-  await updateDoc(ref, patch);
+  await updateDoc(doc(db,"questions",qid), patch);
 }
 
-export async function deleteQuestion(qid){
+// ソフト削除
+export async function softDeleteQuestion(qid){
   await ensureAnonAuth();
-  // ※サブコレクション削除まではしない（最初はこれでOK）
-  await deleteDoc(doc(db,"questions",qid));
+  await updateDoc(doc(db,"questions",qid), { deleted:true, deletedAt: serverTimestamp() });
 }
 
 // ===== 回答 =====
@@ -113,27 +131,24 @@ export async function addAnswer(qid, payload){
   await ensureAnonAuth();
   payload.ownerUid = currentUid;
   payload.createdAt = serverTimestamp();
+  payload.updatedAt = null;
+  payload.deleted = false;
   payload.helpfulCount = 0;
 
-  const aRef = collection(db,"questions",qid,"answers");
-  const qRef = doc(db,"questions",qid);
-
-  const res = await addDoc(aRef, payload);
-  // answerCount +1
-  await updateDoc(qRef, { answerCount: increment(1) });
+  const res = await addDoc(collection(db,"questions",qid,"answers"), payload);
+  await updateDoc(doc(db,"questions",qid), { answerCount: increment(1) });
   return res;
 }
 
 export async function updateAnswer(qid, aid, patch){
   await ensureAnonAuth();
-  const ref = doc(db,"questions",qid,"answers",aid);
   patch.updatedAt = serverTimestamp();
-  await updateDoc(ref, patch);
+  await updateDoc(doc(db,"questions",qid,"answers",aid), patch);
 }
 
-export async function deleteAnswer(qid, aid){
+export async function softDeleteAnswer(qid, aid){
   await ensureAnonAuth();
-  await deleteDoc(doc(db,"questions",qid,"answers",aid));
+  await updateDoc(doc(db,"questions",qid,"answers",aid), { deleted:true, deletedAt: serverTimestamp() });
   await updateDoc(doc(db,"questions",qid), { answerCount: increment(-1) });
 }
 
@@ -159,8 +174,7 @@ export async function toggleLikeQuestion(qid){
 
 export async function isLiked(qid){
   await ensureAnonAuth();
-  const likeRef = doc(db,"questions",qid,"likes",currentUid);
-  const snap = await getDoc(likeRef);
+  const snap = await getDoc(doc(db,"questions",qid,"likes",currentUid));
   return snap.exists();
 }
 
@@ -186,7 +200,31 @@ export async function toggleHelpful(qid, aid){
 
 export async function isHelpful(qid, aid){
   await ensureAnonAuth();
-  const hRef = doc(db,"questions",qid,"answers",aid,"helpful",currentUid);
-  const snap = await getDoc(hRef);
+  const snap = await getDoc(doc(db,"questions",qid,"answers",aid,"helpful",currentUid));
   return snap.exists();
+}
+
+// ===== 通報 =====
+export async function createReport(payload){
+  await ensureAnonAuth();
+  payload.reporterUid = currentUid;
+  payload.createdAt = serverTimestamp();
+  return addDoc(collection(db,"reports"), payload);
+}
+
+// ===== URLコピー =====
+export async function copyToClipboard(text){
+  try{
+    await navigator.clipboard.writeText(text);
+    return true;
+  }catch{
+    // fallback
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    try{ document.execCommand("copy"); }catch{}
+    ta.remove();
+    return true;
+  }
 }

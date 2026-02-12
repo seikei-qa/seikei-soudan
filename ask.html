@@ -15,10 +15,17 @@
 </header>
 
 <main>
+  <div id="maintBox" class="card" style="display:none">
+    <div class="notice">
+      <b>メンテナンス中：</b><span id="maintMsg"></span><br>
+      現在「投稿」は停止中です（閲覧は可能）。
+    </div>
+  </div>
+
   <div class="card">
-    <div class="muted">
-      ※医師名/店舗の詳細/個人情報はNG。<br>
-      ※断定・誹謗中傷は避けて「不安・疑問」の形に寄せるのが安全。
+    <div class="notice">
+      <b>注意：</b>医師名・店舗の詳細・個人情報は書かない。断定や誹謗中傷は避けて「不安/疑問」の形に。<br>
+      NG例：<span class="kbd">詐欺</span> <span class="kbd">医療ミス</span> <span class="kbd">潰れろ</span>
     </div>
 
     <label>表示名（任意）</label>
@@ -61,7 +68,16 @@
 </main>
 
 <script type="module">
-  import { createQuestion, containsDanger } from "./app.js";
+  import { createQuestion, containsDanger, getSiteConfig } from "./app.js";
+
+  async function init(){
+    const cfg = await getSiteConfig().catch(()=>({maintenance:false,message:""}));
+    if(cfg.maintenance){
+      document.getElementById("maintBox").style.display = "block";
+      document.getElementById("maintMsg").textContent = cfg.message || "しばらくお待ちください。";
+      document.getElementById("btn").disabled = true;
+    }
+  }
 
   document.getElementById("btn").addEventListener("click", async ()=>{
     const btn = document.getElementById("btn");
@@ -97,6 +113,8 @@
       btn.disabled = false;
     }
   });
+
+  init();
 </script>
 </body>
 </html>
