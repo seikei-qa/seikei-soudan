@@ -504,7 +504,12 @@
       `;
       wrap.appendChild(thBox);
 
-      const repComposer = document.createElement("div");
+      const replyRoot = document.createElement("div");
+      replyRoot.id = "replyList_" + a.id;
+      replyRoot.style.marginTop = "8px";
+      wrap.appendChild(replyRoot);
+      
+       const repComposer = document.createElement("div");
       repComposer.className = "card";
       repComposer.style.marginTop = "10px";
       repComposer.innerHTML = `
@@ -516,12 +521,6 @@
         <div class="danger small" id="rpWarn_${a.id}" style="margin-top:6px"></div>
       `;
       wrap.appendChild(repComposer);
-
-      const replyRoot = document.createElement("div");
-      replyRoot.id = "replyList_" + a.id;
-      replyRoot.style.marginTop = "8px";
-      wrap.appendChild(replyRoot);
-
       box.appendChild(wrap);
 
       try{
