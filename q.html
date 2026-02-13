@@ -90,6 +90,18 @@
       <div id="answersBox" style="margin-top:10px"></div>
     </div>
 
+    <!-- ✅ 関連質問（追加） -->
+    <div class="card" style="margin-top:14px">
+      <div class="row" style="justify-content:space-between; align-items:center">
+        <h2 style="margin:0">関連質問</h2>
+        <div class="muted small" id="relMeta"></div>
+      </div>
+      <div id="relatedBox" style="margin-top:10px"></div>
+      <div class="muted small" style="margin-top:10px">
+        ※タイトル・本文・タグの類似度で自動表示しています
+      </div>
+    </div>
+
     <div class="footer muted small" style="margin:18px 0 6px 0; text-align:center">
       <a href="./terms.html">利用規約</a> ・ <a href="./privacy.html">プライバシー</a> ・ <a href="./contact.html">連絡・お問い合わせ</a>
     </div>
@@ -98,8 +110,10 @@
 <script type="module">
   import {
     esc, containsDanger, copyToClipboard,
+    tokenize, andMatch,              // ✅ 関連質問用に追加
     ensureAnonAuth, optionalGoogleLogin,
     getSiteConfig,
+    listQuestions,                   // ✅ 関連質問用に追加
     getQuestion, updateQuestion, softDeleteQuestion,
     listAnswers, addAnswer, updateAnswer, softDeleteAnswer,
     setBestAnswer, setThanks,
@@ -134,11 +148,46 @@
       const da = String(d.getDate()).padStart(2,"0");
       const hh = String(d.getHours()).padStart(2,"0");
       const mm = String(d.getMinutes()).padStart(2,"0");
-      const ss = String(d.getSeconds()).padStart(2,"0");
-      return `${y}/${m}/${da} ${hh}:${mm}:${ss}`;
+      return `${y}/${m}/${da} ${hh}:${mm}`;
     }catch{
       return "";
     }
+  }
+  function clampText(s, max=140){
+    const t = String(s||"").replace(/\s+/g," ").trim();
+    if(t.length <= max) return t;
+    return t.slice(0, max) + "…";
+  }
+  function tokensFromQuestion(q){
+    // title/body/tags をまとめて token 化
+    const tags = Array.isArray(q?.tags) ? q.tags.join(" ") : (q?.tags || "");
+    const cat  = q?.category || "";
+    const hay  = `${q?.title||""} ${q?.body||""} ${tags} ${cat}`.toLowerCase();
+    // tokenize は app.js のやつ（空白区切り）
+    // 日本語は空白が少ないので、タグ・カテゴリが効きやすい設計にする
+    const ts = tokenize(hay);
+
+    // 重要ワードだけ少し足す（簡易）
+    const extra = [];
+    for(const w of ["埋没","二重","鼻","豊胸","脂肪","クマ","糸","ヒアルロン酸","ボトックス","ダウンタイム","修正","後悔","腫れ"]){
+      if(hay.includes(w)) extra.push(w);
+    }
+    const set = new Set([...ts, ...extra].filter(Boolean));
+    return Array.from(set).slice(0, 40);
+  }
+  function scoreRelated(baseTokens, q){
+    // 共通token数 + タグ一致を加点
+    const tags = Array.isArray(q?.tags) ? q.tags.join(" ") : (q?.tags || "");
+    const cat  = q?.category || "";
+    const hay  = `${q?.title||""} ${q?.body||""} ${tags} ${cat}`.toLowerCase();
+
+    let score = 0;
+    for(const t of baseTokens){
+      if(t.length >= 2 && hay.includes(t)) score += 1;
+    }
+    // 軽いブースト
+    if(cat && hay.includes(String(cat).toLowerCase())) score += 1;
+    return score;
   }
 
   const qid = qsParam("id");
@@ -153,7 +202,6 @@
   // ========= boot =========
   async function boot(){
     try{
-      // 認証（匿名）
       await ensureAnonAuth();
 
       // メンテ表示
@@ -169,6 +217,7 @@
       await loadQuestion();
       await renderAnswers();
       await refreshButtons();
+      await renderRelated(); // ✅ 追加
       bind();
     }catch(e){
       console.error(e);
@@ -185,7 +234,6 @@
     }
     qData = res.data;
 
-    // ソフト削除は見せない
     if(qData.deleted){
       showMsg("この質問は削除されました。","danger");
     }
@@ -198,20 +246,95 @@
     $("qMeta").textContent =
       `共感:${qData.likeCount||0} / 回答:${qData.answerCount||0} / 作成:${fmtTime(qData.createdAt)} / ${status}`;
 
-    // 質問の編集/削除（自分だけ）
     const isOwner = (qData.ownerUid && qData.ownerUid === currentUid);
     $("editQBtn").style.display = isOwner ? "" : "none";
     $("delQBtn").style.display  = isOwner ? "" : "none";
   }
 
   async function refreshButtons(){
-    // いいね状態
     try{ likedNow = await isLiked(qid); }catch{ likedNow = false; }
     $("likeBtn").textContent = likedNow ? "共感済み" : "共感";
 
-    // 保存状態
     try{ watchingNow = await isWatching(qid); }catch{ watchingNow = false; }
     $("watchBtn").textContent = watchingNow ? "★ 保存中" : "☆ 保存";
+  }
+
+  // ========= related (NEW) =========
+  async function renderRelated(){
+    const box = $("relatedBox");
+    const meta = $("relMeta");
+    box.innerHTML = `<div class="muted">読み込み中...</div>`;
+    meta.textContent = "";
+
+    try{
+      const all = await listQuestions(); // 全件取得（小規模ならOK）
+      const live = (all||[])
+        .filter(x => x?.id && x?.id !== qid)
+        .map(x => ({ id:x.id, data:x.data }))
+        .filter(x => x.data && !x.data.deleted);
+
+      if(!live.length){
+        box.innerHTML = `<div class="muted">関連質問はまだありません</div>`;
+        return;
+      }
+
+      const baseTokens = tokensFromQuestion(qData);
+      // スコア付け
+      const scored = live.map(x => {
+        const s = scoreRelated(baseTokens, x.data);
+        return { ...x, score:s };
+      });
+
+      // 0点は除外しつつ、足りなければ新着で補う
+      const positive = scored.filter(x => x.score > 0).sort((a,b)=>b.score-a.score);
+      const fresh    = scored.sort((a,b)=>{
+        const ta = a.data.createdAt?.toDate ? a.data.createdAt.toDate().getTime() : 0;
+        const tb = b.data.createdAt?.toDate ? b.data.createdAt.toDate().getTime() : 0;
+        return tb - ta;
+      });
+
+      const picked = [];
+      const used = new Set();
+      for(const x of positive){
+        if(picked.length >= 8) break;
+        used.add(x.id); picked.push(x);
+      }
+      for(const x of fresh){
+        if(picked.length >= 8) break;
+        if(used.has(x.id)) continue;
+        used.add(x.id); picked.push(x);
+      }
+
+      meta.textContent = `${picked.length}件表示`;
+
+      box.innerHTML = picked.map(x=>{
+        const d = x.data || {};
+        const title = esc(d.title || "(無題)");
+        const snippet = esc(clampText(d.body || "", 120));
+        const st = d.bestAnswerId ? "🟢" : "🟡";
+        const like = d.likeCount || 0;
+        const ans = d.answerCount || 0;
+        return `
+          <a class="card" href="./q.html?id=${encodeURIComponent(x.id)}" style="display:block; margin-top:8px; text-decoration:none">
+            <div class="row" style="justify-content:space-between; gap:8px; align-items:flex-start">
+              <div style="font-weight:700">${st} ${title}</div>
+              <div class="muted small" style="white-space:nowrap">${like}共感 / ${ans}回答</div>
+            </div>
+            <div class="muted" style="
+              margin-top:6px;
+              display:-webkit-box;
+              -webkit-line-clamp:3;
+              -webkit-box-orient:vertical;
+              overflow:hidden;
+              line-height:1.35;
+            ">${snippet}</div>
+          </a>
+        `;
+      }).join("");
+    }catch(e){
+      console.error(e);
+      box.innerHTML = `<div class="danger small">関連質問の取得に失敗しました</div>`;
+    }
   }
 
   // ========= answers =========
@@ -229,7 +352,6 @@
       return;
     }
 
-    // DOMを積む（innerHTML一括じゃなくてもOK）
     box.innerHTML = "";
     for(const a of live){
       const d = a.data || {};
@@ -239,7 +361,6 @@
       const wrap = document.createElement("div");
       wrap.className = "ans";
 
-      // header
       const head = document.createElement("div");
       head.className = "ansHead";
 
@@ -257,7 +378,6 @@
       right.style.flexWrap = "wrap";
       right.style.justifyContent = "flex-end";
 
-      // helpful
       const helpfulBtn = document.createElement("button");
       helpfulBtn.className = "btn ghost";
       helpfulBtn.dataset.act = "helpful";
@@ -265,7 +385,6 @@
       helpfulBtn.textContent = "参考になった";
       right.appendChild(helpfulBtn);
 
-      // report
       const reportBtn = document.createElement("button");
       reportBtn.className = "btn ghost";
       reportBtn.dataset.act = "reportA";
@@ -273,7 +392,6 @@
       reportBtn.textContent = "通報";
       right.appendChild(reportBtn);
 
-      // best (質問者だけ)
       if(isQOwner){
         const bestBtn = document.createElement("button");
         bestBtn.className = "btn ghost";
@@ -290,7 +408,6 @@
         right.appendChild(thanksBtn);
       }
 
-      // edit/delete (自分だけ)
       if(isOwner){
         const editBtn = document.createElement("button");
         editBtn.className = "btn ghost";
@@ -311,7 +428,6 @@
       head.appendChild(right);
       wrap.appendChild(head);
 
-      // body
       const body = document.createElement("div");
       body.className = "ansBody";
       body.id = "ab_" + a.id;
@@ -319,7 +435,6 @@
       body.textContent = d.body || "";
       wrap.appendChild(body);
 
-      // thanks display
       if(d.thanksText){
         const thanks = document.createElement("div");
         thanks.className = "card";
@@ -328,7 +443,6 @@
         wrap.appendChild(thanks);
       }
 
-      // edit area (answer)
       const editBox = document.createElement("div");
       editBox.id = "ae_" + a.id;
       editBox.style.display = "none";
@@ -343,7 +457,6 @@
       `;
       wrap.appendChild(editBox);
 
-      // thanks editor (質問者)
       const thBox = document.createElement("div");
       thBox.id = "th_" + a.id;
       thBox.style.display = "none";
@@ -359,7 +472,6 @@
       `;
       wrap.appendChild(thBox);
 
-      // reply composer
       const repComposer = document.createElement("div");
       repComposer.className = "card";
       repComposer.style.marginTop = "10px";
@@ -373,28 +485,25 @@
       `;
       wrap.appendChild(repComposer);
 
-      // ✅ ここが重要：返信一覧の「表示先」を作る（これが無いと root=null で落ちる）
       const replyRoot = document.createElement("div");
-      replyRoot.id = "replyList_" + a.id;   // renderReplies(qid, aid) が探すIDと一致
+      replyRoot.id = "replyList_" + a.id;
       replyRoot.style.marginTop = "8px";
       wrap.appendChild(replyRoot);
 
       box.appendChild(wrap);
 
-      // ボタン文言（参考になったのON/OFF）
       try{
         const h = await isHelpful(qid, a.id);
         if(h) helpfulBtn.textContent = "参考済み";
       }catch{}
 
-      // replies描画
       await renderReplies(qid, a.id);
     }
   }
 
   async function renderReplies(qid, aid){
     const root = document.getElementById("replyList_" + aid);
-    if(!root) return; // ←無いなら落ちないように無視
+    if(!root) return;
 
     let list = [];
     try{
@@ -443,14 +552,12 @@
 
   // ========= bind =========
   function bind(){
-    // copy
     $("copyBtn").addEventListener("click", async ()=>{
       await copyToClipboard(location.href);
       showMsg("URLをコピーしました","ok");
       setTimeout(hideMsg, 1200);
     });
 
-    // login
     $("loginBtn").addEventListener("click", async ()=>{
       const r = await optionalGoogleLogin();
       if(r.ok){
@@ -459,24 +566,24 @@
         await loadQuestion();
         await renderAnswers();
         await refreshButtons();
+        await renderRelated(); // ✅
       }else{
         showMsg("ログインに失敗しました<br><span class='muted small'>" + esc(r.error||"") + "</span>", "danger");
       }
     });
 
-    // like
     $("likeBtn").addEventListener("click", async ()=>{
       try{
         const r = await toggleLikeQuestion(qid);
         likedNow = r.liked;
         $("likeBtn").textContent = likedNow ? "共感済み" : "共感";
         await loadQuestion();
+        await renderRelated(); // ✅ 関連も更新
       }catch(e){
         showMsg("共感に失敗しました","danger");
       }
     });
 
-    // watch
     $("watchBtn").addEventListener("click", async ()=>{
       try{
         const r = await toggleWatchQuestion(qid);
@@ -487,7 +594,6 @@
       }
     });
 
-    // report question
     $("reportQBtn").addEventListener("click", async ()=>{
       if(!confirm("この質問を通報しますか？")) return;
       try{
@@ -499,7 +605,6 @@
       }
     });
 
-    // answer post
     $("ansPost").addEventListener("click", async ()=>{
       const text = $("ansText").value.trim();
       $("ansWarn").textContent = "";
@@ -511,15 +616,15 @@
         $("ansText").value = "";
         await loadQuestion();
         await renderAnswers();
+        await renderRelated(); // ✅
         showMsg("回答を投稿しました","ok");
         setTimeout(hideMsg, 1200);
       }catch(e){
         console.error(e);
-        showMsg("回答の投稿に失敗しました<br><span class='muted small'>Firestore rules / ネットワーク / スクリプトエラーの可能性</span>","danger");
+        showMsg("回答の投稿に失敗しました","danger");
       }
     });
 
-    // question edit/delete
     $("editQBtn").addEventListener("click", ()=>{
       $("qEditBox").style.display = "";
       $("qEditTitle").value = qData?.title || "";
@@ -539,6 +644,7 @@
         await updateQuestion(qid, { title:t, body:b });
         $("qEditBox").style.display = "none";
         await loadQuestion();
+        await renderRelated(); // ✅
         showMsg("更新しました","ok");
         setTimeout(hideMsg, 1200);
       }catch(e){
@@ -556,7 +662,6 @@
       }
     });
 
-    // event delegation for answers/replies
     $("answersBox").addEventListener("click", async (ev)=>{
       const btn = ev.target.closest("button");
       if(!btn) return;
@@ -566,11 +671,10 @@
       const rid = btn.dataset.rid;
 
       try{
-        // -------- answers --------
         if(act === "helpful"){
           const r = await toggleHelpful(qid, aid);
           btn.textContent = r.helpful ? "参考済み" : "参考になった";
-          await renderAnswers(); // 数更新
+          await renderAnswers();
           return;
         }
         if(act === "reportA"){
@@ -585,6 +689,7 @@
           await setBestAnswer(qid, aid);
           await loadQuestion();
           await renderAnswers();
+          await renderRelated(); // ✅
           showMsg("ベストアンサーに設定しました","ok");
           setTimeout(hideMsg, 1200);
           return;
@@ -617,8 +722,6 @@
           const ta  = document.getElementById("aeTa_"+aid);
           const warn= document.getElementById("aeWarn_"+aid);
           warn.textContent = "";
-
-          // 現在表示中の本文をコピー
           const body = document.getElementById("ab_"+aid)?.textContent || "";
           ta.value = body;
           box.style.display = "";
@@ -647,12 +750,12 @@
           await softDeleteAnswer(qid, aid);
           await loadQuestion();
           await renderAnswers();
+          await renderRelated(); // ✅
           showMsg("削除しました","ok");
           setTimeout(hideMsg, 1200);
           return;
         }
 
-        // -------- replies --------
         if(act === "rpPost"){
           const ta = document.getElementById("rpTa_"+aid);
           const warn = document.getElementById("rpWarn_"+aid);
@@ -721,7 +824,6 @@
     });
   }
 
-  // start
   boot();
 </script>
 </body>
