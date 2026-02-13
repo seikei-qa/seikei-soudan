@@ -76,6 +76,10 @@
         <span class="muted">（ログイン不要）</span>
       </div>
 
+      <!-- ✅ 追加：回答者X（任意） -->
+      <div class="muted small" style="margin-top:10px">回答者のXを宣伝したい場合（任意）</div>
+      <input id="ansX" class="input" placeholder="例：@xxxxx または xxxxx（任意）" style="margin-top:6px"/>
+
       <textarea id="ansText" class="textarea" placeholder="できるだけ具体的に。経験談や根拠があると強いです。" style="min-height:120px; margin-top:10px"></textarea>
       <div id="ansWarn" class="danger small" style="margin-top:6px"></div>
       <button id="ansPost" class="btn primary" style="margin-top:10px">回答を投稿</button>
@@ -90,7 +94,7 @@
       <div id="answersBox" style="margin-top:10px"></div>
     </div>
 
-    <!-- ✅ 関連質問（追加） -->
+    <!-- 関連質問 -->
     <div class="card" style="margin-top:14px">
       <div class="row" style="justify-content:space-between; align-items:center">
         <h2 style="margin:0">関連質問</h2>
@@ -110,10 +114,10 @@
 <script type="module">
   import {
     esc, containsDanger, copyToClipboard,
-    tokenize, andMatch,              // ✅ 関連質問用に追加
+    tokenize,
     ensureAnonAuth, optionalGoogleLogin,
     getSiteConfig,
-    listQuestions,                   // ✅ 関連質問用に追加
+    listQuestions,
     getQuestion, updateQuestion, softDeleteQuestion,
     listAnswers, addAnswer, updateAnswer, softDeleteAnswer,
     setBestAnswer, setThanks,
@@ -127,6 +131,7 @@
 
   // ========= util =========
   const $ = (id)=>document.getElementById(id);
+
   function qsParam(name){
     const u = new URL(location.href);
     return u.searchParams.get(name);
@@ -139,6 +144,7 @@
     if(kind) el.classList.add(kind);
   }
   function hideMsg(){ $("msg").style.display="none"; $("msg").innerHTML=""; }
+
   function fmtTime(ts){
     try{
       if(!ts) return "";
@@ -153,21 +159,43 @@
       return "";
     }
   }
+
   function clampText(s, max=140){
     const t = String(s||"").replace(/\s+/g," ").trim();
     if(t.length <= max) return t;
     return t.slice(0, max) + "…";
   }
+
+  // ✅ Xハンドル整形＆検証（Twitterの仕様：英数_、最大15文字）
+  function normalizeXHandle(input){
+    let h = String(input || "").trim();
+    if(!h) return "";
+    if(h.startsWith("@")) h = h.slice(1);
+    h = h.trim();
+    if(!h) return "";
+    // URL入れられた時の対策
+    h = h.replace(/^https?:\/\/(www\.)?x\.com\//i, "");
+    h = h.replace(/^https?:\/\/(www\.)?twitter\.com\//i, "");
+    h = h.split(/[/?#]/)[0]; // 余計なパス切る
+
+    // 許可：英数と_、1〜15文字
+    const ok = /^[A-Za-z0-9_]{1,15}$/.test(h);
+    if(!ok) return null; // 不正
+    return h;
+  }
+  function xLinkHtml(handle){
+    const h = normalizeXHandle(handle);
+    if(!h) return "";
+    const url = "https://x.com/" + encodeURIComponent(h);
+    return `<a href="${url}" target="_blank" rel="noopener">@${esc(h)}</a>`;
+  }
+
   function tokensFromQuestion(q){
-    // title/body/tags をまとめて token 化
     const tags = Array.isArray(q?.tags) ? q.tags.join(" ") : (q?.tags || "");
     const cat  = q?.category || "";
     const hay  = `${q?.title||""} ${q?.body||""} ${tags} ${cat}`.toLowerCase();
-    // tokenize は app.js のやつ（空白区切り）
-    // 日本語は空白が少ないので、タグ・カテゴリが効きやすい設計にする
     const ts = tokenize(hay);
 
-    // 重要ワードだけ少し足す（簡易）
     const extra = [];
     for(const w of ["埋没","二重","鼻","豊胸","脂肪","クマ","糸","ヒアルロン酸","ボトックス","ダウンタイム","修正","後悔","腫れ"]){
       if(hay.includes(w)) extra.push(w);
@@ -175,8 +203,8 @@
     const set = new Set([...ts, ...extra].filter(Boolean));
     return Array.from(set).slice(0, 40);
   }
+
   function scoreRelated(baseTokens, q){
-    // 共通token数 + タグ一致を加点
     const tags = Array.isArray(q?.tags) ? q.tags.join(" ") : (q?.tags || "");
     const cat  = q?.category || "";
     const hay  = `${q?.title||""} ${q?.body||""} ${tags} ${cat}`.toLowerCase();
@@ -185,7 +213,6 @@
     for(const t of baseTokens){
       if(t.length >= 2 && hay.includes(t)) score += 1;
     }
-    // 軽いブースト
     if(cat && hay.includes(String(cat).toLowerCase())) score += 1;
     return score;
   }
@@ -204,7 +231,6 @@
     try{
       await ensureAnonAuth();
 
-      // メンテ表示
       try{
         const sc = await getSiteConfig();
         if(sc?.maintenance){
@@ -217,7 +243,7 @@
       await loadQuestion();
       await renderAnswers();
       await refreshButtons();
-      await renderRelated(); // ✅ 追加
+      await renderRelated();
       bind();
     }catch(e){
       console.error(e);
@@ -259,7 +285,7 @@
     $("watchBtn").textContent = watchingNow ? "★ 保存中" : "☆ 保存";
   }
 
-  // ========= related (NEW) =========
+  // ========= related =========
   async function renderRelated(){
     const box = $("relatedBox");
     const meta = $("relMeta");
@@ -267,7 +293,7 @@
     meta.textContent = "";
 
     try{
-      const all = await listQuestions(); // 全件取得（小規模ならOK）
+      const all = await listQuestions();
       const live = (all||[])
         .filter(x => x?.id && x?.id !== qid)
         .map(x => ({ id:x.id, data:x.data }))
@@ -279,13 +305,8 @@
       }
 
       const baseTokens = tokensFromQuestion(qData);
-      // スコア付け
-      const scored = live.map(x => {
-        const s = scoreRelated(baseTokens, x.data);
-        return { ...x, score:s };
-      });
+      const scored = live.map(x => ({ ...x, score: scoreRelated(baseTokens, x.data) }));
 
-      // 0点は除外しつつ、足りなければ新着で補う
       const positive = scored.filter(x => x.score > 0).sort((a,b)=>b.score-a.score);
       const fresh    = scored.sort((a,b)=>{
         const ta = a.data.createdAt?.toDate ? a.data.createdAt.toDate().getTime() : 0;
@@ -364,12 +385,17 @@
       const head = document.createElement("div");
       head.className = "ansHead";
 
+      // ✅ 追加：回答者Xリンク表示
+      const xHtml = d.xHandle ? xLinkHtml(d.xHandle) : "";
+      const xLine = xHtml ? `<span class="muted small" style="margin-left:10px">回答者X: ${xHtml}</span>` : "";
+
       const left = document.createElement("div");
       left.innerHTML = `
         <b>${d.best ? "🏆 ベストアンサー" : "回答"}</b>
         <span class="muted small" style="margin-left:8px">${esc(fmtTime(d.createdAt))}</span>
         <span class="pill" style="margin-left:8px">参考:${d.helpfulCount||0}</span>
         ${d.best ? `<span class="pill" style="margin-left:6px">選ばれました</span>` : ``}
+        ${xLine}
       `;
 
       const right = document.createElement("div");
@@ -448,7 +474,13 @@
       editBox.style.display = "none";
       editBox.style.marginTop = "8px";
       editBox.innerHTML = `
-        <textarea class="textarea" id="aeTa_${a.id}" style="min-height:100px"></textarea>
+        <div class="muted small">回答を編集</div>
+
+        <!-- ✅ 追加：回答者X -->
+        <div class="muted small" style="margin-top:8px">回答者のX（任意）</div>
+        <input class="input" id="aeX_${a.id}" placeholder="例：@xxxxx または xxxxx（任意）" style="margin-top:6px"/>
+
+        <textarea class="textarea" id="aeTa_${a.id}" style="min-height:100px; margin-top:10px"></textarea>
         <div class="row" style="gap:8px;margin-top:6px;flex-wrap:wrap">
           <button class="btn primary" data-act="saveA" data-aid="${a.id}">保存</button>
           <button class="btn ghost" data-act="cancelA" data-aid="${a.id}">キャンセル</button>
@@ -566,7 +598,7 @@
         await loadQuestion();
         await renderAnswers();
         await refreshButtons();
-        await renderRelated(); // ✅
+        await renderRelated();
       }else{
         showMsg("ログインに失敗しました<br><span class='muted small'>" + esc(r.error||"") + "</span>", "danger");
       }
@@ -578,7 +610,7 @@
         likedNow = r.liked;
         $("likeBtn").textContent = likedNow ? "共感済み" : "共感";
         await loadQuestion();
-        await renderRelated(); // ✅ 関連も更新
+        await renderRelated();
       }catch(e){
         showMsg("共感に失敗しました","danger");
       }
@@ -607,16 +639,30 @@
 
     $("ansPost").addEventListener("click", async ()=>{
       const text = $("ansText").value.trim();
+      const xRaw = $("ansX").value.trim();
       $("ansWarn").textContent = "";
+
       if(!text){ $("ansWarn").textContent = "本文を入力してください"; return; }
       if(containsDanger(text)){ $("ansWarn").textContent = "断定/攻撃的な表現が含まれています。表現をやわらかくしてください。"; return; }
 
+      // ✅ X（任意）検証
+      let xHandle = "";
+      if(xRaw){
+        const norm = normalizeXHandle(xRaw);
+        if(norm === null){
+          $("ansWarn").textContent = "XのIDが不正です（英数字と_、最大15文字）。例：@abc_123";
+          return;
+        }
+        xHandle = norm;
+      }
+
       try{
-        await addAnswer(qid, { body:text });
+        await addAnswer(qid, { body:text, xHandle }); // ✅ 追加フィールド
         $("ansText").value = "";
+        $("ansX").value = "";
         await loadQuestion();
         await renderAnswers();
-        await renderRelated(); // ✅
+        await renderRelated();
         showMsg("回答を投稿しました","ok");
         setTimeout(hideMsg, 1200);
       }catch(e){
@@ -644,7 +690,7 @@
         await updateQuestion(qid, { title:t, body:b });
         $("qEditBox").style.display = "none";
         await loadQuestion();
-        await renderRelated(); // ✅
+        await renderRelated();
         showMsg("更新しました","ok");
         setTimeout(hideMsg, 1200);
       }catch(e){
@@ -689,7 +735,7 @@
           await setBestAnswer(qid, aid);
           await loadQuestion();
           await renderAnswers();
-          await renderRelated(); // ✅
+          await renderRelated();
           showMsg("ベストアンサーに設定しました","ok");
           setTimeout(hideMsg, 1200);
           return;
@@ -720,10 +766,25 @@
         if(act === "editA"){
           const box = document.getElementById("ae_"+aid);
           const ta  = document.getElementById("aeTa_"+aid);
+          const xIn = document.getElementById("aeX_"+aid);
           const warn= document.getElementById("aeWarn_"+aid);
           warn.textContent = "";
+
+          // 現在本文＆Xをセット
           const body = document.getElementById("ab_"+aid)?.textContent || "";
           ta.value = body;
+
+          // 表示中の回答データから X を拾うために、簡易的に再取得（重くない規模想定）
+          // ※最適化したいなら renderAnswers の中で data を保持してもOK
+          try{
+            const list = await listAnswers(qid);
+            const found = (list||[]).find(x => x.id === aid);
+            const xh = found?.data?.xHandle || "";
+            xIn.value = xh ? ("@" + xh) : "";
+          }catch{
+            xIn.value = "";
+          }
+
           box.style.display = "";
           return;
         }
@@ -734,12 +795,27 @@
         }
         if(act === "saveA"){
           const ta  = document.getElementById("aeTa_"+aid);
+          const xIn = document.getElementById("aeX_"+aid);
           const warn= document.getElementById("aeWarn_"+aid);
           warn.textContent = "";
+
           const text = (ta?.value||"").trim();
           if(!text){ warn.textContent = "本文が空です"; return; }
           if(containsDanger(text)){ warn.textContent = "断定/攻撃的な表現が含まれています。"; return; }
-          await updateAnswer(qid, aid, { body:text });
+
+          // ✅ X（任意）検証
+          let xHandle = "";
+          const xRaw = (xIn?.value||"").trim();
+          if(xRaw){
+            const norm = normalizeXHandle(xRaw);
+            if(norm === null){
+              warn.textContent = "XのIDが不正です（英数字と_、最大15文字）。例：@abc_123";
+              return;
+            }
+            xHandle = norm;
+          }
+
+          await updateAnswer(qid, aid, { body:text, xHandle }); // ✅ 追加
           await renderAnswers();
           showMsg("回答を更新しました","ok");
           setTimeout(hideMsg, 1200);
@@ -750,7 +826,7 @@
           await softDeleteAnswer(qid, aid);
           await loadQuestion();
           await renderAnswers();
-          await renderRelated(); // ✅
+          await renderRelated();
           showMsg("削除しました","ok");
           setTimeout(hideMsg, 1200);
           return;
