@@ -662,56 +662,112 @@
     }
   }
 
-  // ========= related =========
-  async function renderRelated(){
-    relatedInner.innerHTML = `<div class="muted">読み込み中...</div>`;
-    let all = [];
-    try{
-      all = await listQuestions();
-    }catch(e){
-      relatedInner.innerHTML = `<div class="muted">関連質問の取得に失敗しました</div>`;
-      console.error(e);
+  // ===== 関連質問（フォールバック付き）=====
+async function renderRelated(){
+  // ↓この2つのIDがあなたのHTMLと違うなら、ID名だけ合わせてください
+  const listEl  = document.getElementById("relatedInner");   // 関連質問を入れる箱
+  const countEl = document.getElementById("relCount");  // 「8件表示」などの表示（無ければOK）
+　const boxEl   = document.getElementById("relatedBox"); // 関連質問全体の箱（無ければOK）
+  if(!listEl) return;
+
+  listEl.innerHTML = `<div class="muted">読み込み中...</div>`;
+
+  try{
+    // いま見てる質問
+    const me = (qData || {}).data || {};
+    const meTitle = me.title || "";
+    const meBody  = me.body || "";
+    const meCat   = me.category || "";
+    const meTags  = Array.isArray(me.tags) ? me.tags : [];
+
+    // “関連の種” を作る（タイトル＋本文＋タグ）
+    const meTokens = tokenize(`${meTitle} ${meBody} ${meTags.join(" ")}`);
+
+    // 最近の質問だけを対象にする（重くしない）
+    // ※getDocs/query/collection/orderBy/limit を q.html 側で既にimportしてる前提
+    const snap = await getDocs(query(collection(db,"questions"), orderBy("createdAt","desc"), limit(300)));
+
+    const candidates = [];
+    snap.forEach(docSnap=>{
+      const d = docSnap.data() || {};
+      if(docSnap.id === qid) return;        // 自分自身は除外
+      if(d.deleted) return;                  // ソフト削除除外（使ってないなら無視される）
+      if(!d.title && !d.body) return;
+
+      const title = d.title || "";
+      const body  = d.body || "";
+      const cat   = d.category || "";
+      const tags  = Array.isArray(d.tags) ? d.tags : [];
+
+      const tokens = tokenize(`${title} ${body} ${tags.join(" ")}`);
+
+      // スコア：トークンの一致数＋カテゴリ一致ボーナス＋タグ一致ボーナス
+      let score = 0;
+      for(const t of meTokens){
+        if(tokens.includes(t)) score += 1;
+      }
+      if(meCat && cat && meCat === cat) score += 5;
+
+      // タグ一致を少し加点
+      if(meTags.length && tags.length){
+        const set = new Set(tags);
+        let hit = 0;
+        for(const tg of meTags) if(set.has(tg)) hit++;
+        score += hit * 2;
+      }
+
+      candidates.push({
+        id: docSnap.id,
+        d,
+        score,
+        createdAt: d.createdAt?.seconds || 0
+      });
+    });
+
+    // まず「関連度スコアが高い順」
+    candidates.sort((a,b)=>{
+      if(b.score !== a.score) return b.score - a.score;
+      return b.createdAt - a.createdAt;
+    });
+
+    // 関連が0件（スコアが全部0）なら最新を出す（フォールバック）
+    let picks = candidates.filter(x=>x.score > 0).slice(0, 8);
+    if(picks.length === 0){
+      picks = candidates.slice(0, 8);
+    }
+
+    if(countEl) countEl.textContent = `${picks.length}件表示`;
+
+    if(picks.length === 0){
+      listEl.innerHTML = `<div class="muted">まだありません</div>`;
       return;
     }
 
-    const me = qObj?.data || {};
-    const tokens = tokenize((me.title||"") + " " + (me.body||"")).slice(0,10);
+    // 表示
+    listEl.innerHTML = picks.map(x=>{
+      const d = x.d || {};
+      const t = esc(d.title || "(無題)");
+      const b = esc((d.body || "").trim());
+      const snippet = b.length > 80 ? b.slice(0,80) + "…" : b;
 
-    const candidates = (all||[])
-      .filter(x => x.id !== qid)
-      .filter(x => !x.data?.deleted)
-      .map(x=>{
-        const d = x.data || {};
-        const hay = ((d.title||"") + " " + (d.body||"")).toLowerCase();
-        let score = 0;
-        for(const t of tokens){
-          if(t && hay.includes(String(t).toLowerCase())) score++;
-        }
-        return { id:x.id, data:d, score };
-      })
-      .filter(x => x.score >= 2)
-      .sort((a,b)=>b.score - a.score)
-      .slice(0, 8);
+      const like = Number(d.likeCount || 0);
+      const ans  = Number(d.answerCount || 0);
 
-    relCount.textContent = `${candidates.length}件`;
-
-    if(!candidates.length){
-      relatedInner.innerHTML = `<div class="muted">関連質問はまだありません</div>`;
-      return;
-    }
-
-    relatedInner.innerHTML = candidates.map(x=>{
-      const d = x.data || {};
-      const sub = (d.body||"").trim().slice(0,60);
       return `
-        <a class="card" href="./q.html?id=${encodeURIComponent(x.id)}" style="display:block;text-decoration:none;color:inherit;margin:8px 0">
-          <div style="font-weight:700">${esc(d.title||"(無題)")}</div>
-          <div class="muted small" style="margin-top:4px">${esc(sub)}${sub.length>=60?"…":""}</div>
-          <div class="muted small" style="margin-top:6px">${d.likeCount||0}共感 / ${d.answerCount||0}回答</div>
+        <a class="relItem" href="q.html?id=${x.id}" style="display:block;text-decoration:none;color:inherit;">
+          <div class="relTitle">🟡 ${t}</div>
+          <div class="muted small" style="margin-top:4px;">${snippet}</div>
+          <div class="muted small" style="margin-top:6px;">${like}共感 / ${ans}回答</div>
         </a>
       `;
     }).join("");
+
+  }catch(e){
+    console.error(e);
+    listEl.innerHTML = `<div class="danger small">関連質問の取得に失敗しました</div>`;
   }
+}
+
 
   // ========= boot =========
   async function boot(){
