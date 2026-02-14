@@ -22,14 +22,16 @@
     <div class="notice">
       <b>ランキングについて：</b>
       ベスト回答数 / 参考になった数 / 回答数を集計しています。<br>
-      ※匿名のままでも参加できますが、端末変更などでIDが変わることがあります。ガチ勢はGoogleログイン推奨。
+      ※匿名のままでも参加できますが、端末変更などでIDが変わることがあります。ガチ勢はGoogleログイン推奨。<br>
+      ※Xは「回答投稿時に入力されたもの」を自動で表示します（代表1つ）。
     </div>
 
     <div class="grid" style="margin-top:12px">
       <div>
-        <label>集計</label>
+        <label>表示</label>
         <select id="mode">
-          <option value="best" selected>ベスト回答数</option>
+          <option value="mix" selected>総合（回答＋ベスト＋参考）</option>
+          <option value="best">ベスト回答数</option>
           <option value="help">参考になった合計</option>
           <option value="ans">回答数</option>
         </select>
@@ -44,6 +46,10 @@
       </div>
     </div>
 
+    <div class="muted" style="margin-top:8px">
+      総合スコア：回答×1 + ベスト×5 + 参考×0.2（調整可）
+    </div>
+
     <div id="status" class="muted" style="margin-top:10px">読み込み中…</div>
     <div id="list" style="margin-top:10px"></div>
   </div>
@@ -52,23 +58,52 @@
 <script type="module">
   import { getLeaderboardSample, esc } from "./app.js";
 
+  // X表示用（rank.html内で完結）
+  function xToHtml(xh){
+    const s = String(xh || "").trim();
+    if(!s) return "";
+    if(s.startsWith("@")){
+      const name = s.slice(1);
+      return `<a href="https://x.com/${esc(name)}" target="_blank" rel="noopener">${esc(s)}</a>`;
+    }
+    if(/^https?:\/\//.test(s)){
+      return `<a href="${esc(s)}" target="_blank" rel="noopener">X</a>`;
+    }
+    return `<span class="kbd">${esc(s)}</span>`;
+  }
+
+  // modeに応じて強調する表
   function renderTable(rows, mode){
-    const label = mode==="best" ? "ベスト" : mode==="help" ? "参考合計" : "回答数";
+    const thR = (t, active)=>`<th style="text-align:right;border-bottom:1px solid #eee;padding:8px;${active?'font-weight:900;':''}">${t}</th>`;
+    const tdR = (v, active)=>`<td style="padding:8px;border-bottom:1px solid #f1f1f1;text-align:right">${active?`<b>${v}</b>`:`${v}`}</td>`;
+
     return `
       <table style="width:100%;border-collapse:collapse">
         <thead>
           <tr>
             <th style="text-align:left;border-bottom:1px solid #eee;padding:8px">順位</th>
             <th style="text-align:left;border-bottom:1px solid #eee;padding:8px">ユーザーID（簡略）</th>
-            <th style="text-align:right;border-bottom:1px solid #eee;padding:8px">${label}</th>
+            <th style="text-align:left;border-bottom:1px solid #eee;padding:8px">X</th>
+            ${thR("総合", mode==="mix")}
+            ${thR("ベスト", mode==="best")}
+            ${thR("参考合計", mode==="help")}
+            ${thR("回答数", mode==="ans")}
           </tr>
         </thead>
         <tbody>
           ${rows.map((r,i)=>`
             <tr>
               <td style="padding:8px;border-bottom:1px solid #f1f1f1">${i+1}</td>
-              <td style="padding:8px;border-bottom:1px solid #f1f1f1"><span class="kbd">${esc(r.uid.slice(0,10))}</span></td>
-              <td style="padding:8px;border-bottom:1px solid #f1f1f1;text-align:right"><b>${r.value}</b></td>
+              <td style="padding:8px;border-bottom:1px solid #f1f1f1">
+                <span class="kbd">${esc(r.uid.slice(0,10))}</span>
+              </td>
+              <td style="padding:8px;border-bottom:1px solid #f1f1f1">
+                ${r.xHtml || `<span class="muted">-</span>`}
+              </td>
+              ${tdR(r.mix, mode==="mix")}
+              ${tdR(r.best, mode==="best")}
+              ${tdR(r.help, mode==="help")}
+              ${tdR(r.ans, mode==="ans")}
             </tr>
           `).join("")}
         </tbody>
@@ -82,34 +117,90 @@
     const sample = Number(document.getElementById("sample").value);
 
     status.textContent = "集計中…";
+
     const answers = await getLeaderboardSample(sample);
 
     // uidごとに集計
-    const map = new Map();
+    const map = new Map(); // uid -> {best, help, ans}
+    const xMap = new Map(); // uid -> Map(xHandle -> count)
+
     for(const a of answers){
       const d = a.data || {};
       if(d.deleted) continue;
+
       const uid = d.ownerUid;
       if(!uid) continue;
 
       const cur = map.get(uid) || { best:0, help:0, ans:0 };
       cur.ans += 1;
-      cur.help += (d.helpfulCount || 0);
+      cur.help += Number(d.helpfulCount || 0);
       if(d.best) cur.best += 1;
       map.set(uid, cur);
+
+      // X集計（最頻出を代表にする）
+      const xh = String(d.xHandle || "").trim();
+      if(xh){
+        if(!xMap.has(uid)) xMap.set(uid, new Map());
+        const m = xMap.get(uid);
+        m.set(xh, (m.get(xh) || 0) + 1);
+      }
     }
 
-    const rows = [...map.entries()].map(([uid,v])=>{
-      const value = mode==="best" ? v.best : mode==="help" ? v.help : v.ans;
-      return { uid, value };
-    }).filter(r=>r.value>0).sort((a,b)=>b.value-a.value).slice(0,50);
+    // 総合スコア（調整可）
+    const scoreMix = (v)=> (v.ans * 1) + (v.best * 5) + (v.help * 0.2);
+
+    // rows作成（4指標＋X）
+    let rows = [...map.entries()].map(([uid,v])=>{
+      // 代表X（最頻出）
+      let bestX = "";
+      const mx = xMap.get(uid);
+      if(mx){
+        let max = 0;
+        for(const [k,c] of mx.entries()){
+          if(c > max){ max = c; bestX = k; }
+        }
+      }
+
+      const mixRaw = scoreMix(v);
+      return {
+        uid,
+        xHtml: bestX ? xToHtml(bestX) : "",
+        mix: Math.round(mixRaw * 10) / 10,
+        best: v.best,
+        help: v.help,
+        ans: v.ans
+      };
+    });
+
+    // modeに応じて0除外
+    rows = rows.filter(r=>{
+      if(mode==="mix") return r.mix > 0;
+      if(mode==="best") return r.best > 0;
+      if(mode==="help") return r.help > 0;
+      return r.ans > 0;
+    });
+
+    // modeに応じてソート
+    const key = mode==="mix" ? "mix" : mode==="best" ? "best" : mode==="help" ? "help" : "ans";
+    rows.sort((a,b)=>{
+      if(b[key] !== a[key]) return b[key] - a[key];
+      // tie-break
+      if(b.best !== a.best) return b.best - a.best;
+      if(b.help !== a.help) return b.help - a.help;
+      return b.ans - a.ans;
+    });
+
+    rows = rows.slice(0, 50);
 
     status.textContent = rows.length ? "" : "まだデータがありません（回答が増えるとランキングが出ます）";
     document.getElementById("list").innerHTML = rows.length ? renderTable(rows, mode) : "";
   }
 
   ["mode","sample"].forEach(id=>document.getElementById(id).addEventListener("change", load));
-  load();
+  load().catch(e=>{
+    console.error(e);
+    document.getElementById("status").textContent = "読み込みに失敗しました（コンソールを確認）";
+  });
 </script>
 </body>
 </html>
