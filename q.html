@@ -24,6 +24,15 @@
     <div id="qCard" class="card" style="margin-top:12px">
       <div class="muted small">質問</div>
       <h1 id="qTitle" style="margin:6px 0 8px 0; font-size:22px; line-height:1.2"></h1>
+      <div class="row" id="qOwnerBtns" style="gap:8px;flex-wrap:wrap;margin-top:8px;display:none">
+  <button id="qEditBtn" class="btn ghost">質問を編集</button>
+  <button id="qDelBtn" class="btn ghost danger">質問を削除</button>
+</div>
+
+      <div class="row" id="qOwnerBtns" style="gap:8px;flex-wrap:wrap;margin-top:8px;display:none">
+  <button id="qEditBtn" class="btn ghost">質問を編集</button>
+  <button id="qDelBtn" class="btn ghost danger">質問を削除</button>
+</div>
 
       <div class="row" style="gap:8px;flex-wrap:wrap">
         <button id="copyUrlBtn" class="btn ghost">URLコピー</button>
@@ -35,6 +44,23 @@
       <div id="qMeta" class="muted small" style="margin-top:10px"></div>
       <div id="qBody" style="white-space:pre-wrap;margin-top:10px"></div>
       <div id="qDanger" class="danger small" style="display:none;margin-top:10px"></div>
+      <div id="qEditBox" class="card" style="display:none;margin-top:12px">
+  <div class="muted small">質問を編集（自分の投稿のみ）</div>
+
+  <div class="muted small" style="margin-top:8px">タイトル</div>
+  <input id="qEditTitle" class="input" style="width:100%" />
+
+  <div class="muted small" style="margin-top:8px">本文</div>
+  <textarea id="qEditBody" class="textarea" style="min-height:120px"></textarea>
+
+  <div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap">
+    <button id="qEditSaveBtn" class="btn primary">保存</button>
+    <button id="qEditCancelBtn" class="btn ghost">キャンセル</button>
+  </div>
+
+  <div id="qEditWarn" class="danger small" style="display:none;margin-top:8px"></div>
+</div>
+
     </div>
 
     <!-- 回答投稿 -->
@@ -91,7 +117,8 @@
     getSiteConfig,
 
     // question
-    getQuestion, listQuestions,
+    getQuestion, listQuestions, updateQuestion, softDeleteQuestion,
+
     toggleWatchQuestion, isWatching,
     toggleLikeQuestion, isLiked,
     copyToClipboard,
@@ -125,6 +152,16 @@ console.log("q.html qid =", qid, "search =", location.search);
   const qMeta  = document.getElementById("qMeta");
   const qBody  = document.getElementById("qBody");
   const qDanger = document.getElementById("qDanger");
+  const qOwnerBtns = document.getElementById("qOwnerBtns");
+const qEditBtn = document.getElementById("qEditBtn");
+const qDelBtn  = document.getElementById("qDelBtn");
+
+const qEditBox = document.getElementById("qEditBox");
+const qEditTitle = document.getElementById("qEditTitle");
+const qEditBody  = document.getElementById("qEditBody");
+const qEditSaveBtn = document.getElementById("qEditSaveBtn");
+const qEditCancelBtn = document.getElementById("qEditCancelBtn");
+const qEditWarn = document.getElementById("qEditWarn");
 
   const copyUrlBtn = document.getElementById("copyUrlBtn");
   const watchBtn = document.getElementById("watchBtn");
@@ -244,6 +281,10 @@ console.log("q.html qid =", qid, "search =", location.search);
     // 危険ワード注意（表示だけ）
     const danger = containsDanger((d.title||"") + "\n" + (d.body||""));
     showWarn(qDanger, danger ? "注意：断定・攻撃ワードが含まれている可能性があります。表現の見直しを推奨。" : "");
+    const isOwner = d.ownerUid && currentUid && d.ownerUid === currentUid;
+if(qOwnerBtns){
+  qOwnerBtns.style.display = isOwner ? "flex" : "none";
+}
 
     await refreshLikeWatch();
   }
@@ -842,6 +883,80 @@ async function renderRelated(){
       if(r.ok) alert("ログインしました（任意）");
       else alert("ログイン失敗：" + (r.error||""));
     });
+    // ===== 質問：編集UI 開閉 =====
+qEditBtn?.addEventListener("click", ()=>{
+  if(!qObj?.data) return;
+
+  // warn消す
+  qEditWarn.style.display = "none";
+  qEditWarn.textContent = "";
+
+  // 現在値を入れる
+  qEditTitle.value = qObj.data.title || "";
+  qEditBody.value  = qObj.data.body  || "";
+
+  // 表示切替
+  qEditBox.style.display = (qEditBox.style.display === "none" ? "block" : "none");
+});
+
+qEditCancelBtn?.addEventListener("click", ()=>{
+  qEditBox.style.display = "none";
+});
+
+// ===== 質問：保存 =====
+qEditSaveBtn?.addEventListener("click", async ()=>{
+  qEditWarn.style.display = "none";
+  qEditWarn.textContent = "";
+
+  const title = (qEditTitle.value||"").trim();
+  const body  = (qEditBody.value||"").trim();
+
+  if(!title || !body){
+    qEditWarn.style.display = "block";
+    qEditWarn.textContent = "タイトルと本文は必須です。";
+    return;
+  }
+  if(title.length > 80){
+    qEditWarn.style.display = "block";
+    qEditWarn.textContent = "タイトルは80文字以内にしてください。";
+    return;
+  }
+  if(body.length > 5000){
+    qEditWarn.style.display = "block";
+    qEditWarn.textContent = "本文は5000文字以内にしてください。";
+    return;
+  }
+  if(containsDanger(title + "\n" + body)){
+    qEditWarn.style.display = "block";
+    qEditWarn.textContent = "注意：断定・攻撃ワードが含まれる可能性があります。表現を見直してください。";
+    return;
+  }
+
+  try{
+    await updateQuestion(qid, { title, body });
+    qEditBox.style.display = "none";
+    await renderQuestion();
+    await renderRelated();
+    alert("更新しました");
+  }catch(e){
+    console.error(e);
+    qEditWarn.style.display = "block";
+    qEditWarn.textContent = "更新に失敗しました（自分の投稿のみ）";
+  }
+});
+
+// ===== 質問：削除（ソフト削除）=====
+qDelBtn?.addEventListener("click", async ()=>{
+  if(!confirm("この質問を削除（ソフト削除）しますか？")) return;
+  try{
+    await softDeleteQuestion(qid);
+    alert("削除しました");
+    location.href = "./index.html";
+  }catch(e){
+    console.error(e);
+    alert("削除に失敗しました（自分の投稿のみ）");
+  }
+});
 
     postAnsBtn.addEventListener("click", async ()=>{
       showWarn(ansWarn, "");
