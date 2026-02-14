@@ -108,8 +108,14 @@
   } from "./app.js";
 
   // ========= state =========
-  const params = new URLSearchParams(location.search);
-  const qid = params.get("id");
+ const params = new URLSearchParams(location.search);
+const qid =
+  params.get("id") ||
+  params.get("qid") ||
+  params.get("q") ||
+  params.get("questionId");
+console.log("q.html qid =", qid, "search =", location.search);
+
   let qObj = null; // {id,data}
   let answerSort = "helpful";
 
@@ -869,7 +875,13 @@ async function renderRelated(){
     await renderRelated();
   }
 
-  boot();
+ window.addEventListener("DOMContentLoaded", () => {
+  boot().catch(e => {
+    console.error("boot failed:", e);
+    alert("ページの初期化に失敗しました。コンソールを確認してください。");
+  });
+});
+
 </script>
 </body>
 </html>
