@@ -94,14 +94,30 @@
     `;
   }
 
-  function pickDisplayName(u){
-    // XがあればXを優先表示、それ以外はUID短縮
-    if(u.x) {
-      // Xの文字列は @xxxx 形式想定
-      return `<span class="kbd">${esc(u.x)}</span>`;
+   function pickDisplayName(u){
+  // Xがあればリンク（@xxxx → https://x.com/xxxx）
+  if(u.x){
+    const x = String(u.x).trim();
+    if(x.startsWith("@")){
+      const name = x.slice(1);
+      const safeName = esc(name);
+      return `<a href="https://x.com/${safeName}" target="_blank" rel="noopener">
+                <span class="kbd">${esc(x)}</span>
+              </a>`;
     }
-    return `<span class="kbd">${esc(u.uid.slice(0,10))}</span>`;
+    // 万一URLで入ってた場合もリンクにする
+    if(/^https?:\/\//.test(x)){
+      return `<a href="${esc(x)}" target="_blank" rel="noopener">
+                <span class="kbd">X</span>
+              </a>`;
+    }
+    // それ以外は表示だけ
+    return `<span class="kbd">${esc(x)}</span>`;
   }
+
+  // Xが無いならUID短縮
+  return `<span class="kbd">${esc(u.uid.slice(0,10))}</span>`;
+}
 
   async function load(){
     const statusEl = document.getElementById("status");
