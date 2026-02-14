@@ -430,6 +430,8 @@ console.log("q.html qid =", qid, "search =", location.search);
     }
 
     const live = (list||[]).filter(a => !a.data?.deleted);
+    const answersMap = new Map(live.map(x => [x.id, x.data || {}]));
+
     ansCount.textContent = `(${live.length}件)`;
 
     if(!live.length){
@@ -586,7 +588,7 @@ console.log("q.html qid =", qid, "search =", location.search);
             return;
           }
 
-          if(act === "thanks"){
+       if(act === "thanks"){
   const box = document.getElementById(`thBox_${aid}`);
   if(box){
     const next = (box.style.display==="none" ? "block" : "none");
@@ -596,7 +598,8 @@ console.log("q.html qid =", qid, "search =", location.search);
     if(next === "block"){
       const ta = document.getElementById(`thTa_${aid}`);
       if(ta && !ta.value){
-        ta.value = (d.thanksText || "");
+        const ad = answersMap.get(aid) || {};
+        ta.value = (ad.thanksText || "");
       }
     }
   }
