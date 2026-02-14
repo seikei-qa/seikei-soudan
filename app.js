@@ -293,17 +293,9 @@ export async function addAnswer(qid, payload){
     }
 
     // ★通知：保存（ウォッチ）している人へ（質問者は二重通知を避ける）
-    const watchers = await listWatchersUids(qid, 500);
-    for(const uid of watchers){
-      if(uid === currentUid) continue;
-      if(q.ownerUid && uid === q.ownerUid) continue;
-      await createNotification(uid, {
-        type: "watch_answer",
-        qid,
-        aid: res.id,
-        message: "保存した質問に新しい回答がつきました"
-      });
-    }
+    // 通知：質問者へ（自分が質問者なら送らない）
+
+
   }catch(e){
     console.warn("notify(answer/watch) failed", e);
   }
