@@ -473,6 +473,15 @@
         </div>
 
         <div class="ansBody" style="white-space:pre-wrap;margin-top:8px">${esc(d.body||"")}</div>
+        ${(d.thanksText && String(d.thanksText).trim())
+  ? `
+    <div class="card" style="margin-top:10px;padding:10px">
+      <div class="muted small">お礼コメント</div>
+      <div style="white-space:pre-wrap;margin-top:6px">${esc(d.thanksText)}</div>
+      ${d.thanksAt ? `<div class="muted small" style="margin-top:6px">${esc(fmtTime(d.thanksAt))}</div>` : ``}
+    </div>
+  `
+  : ``}
 
         <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:10px">
           <button class="btn ghost" data-act="helpful" data-aid="${a.id}">参考になった</button>
@@ -572,10 +581,22 @@
           }
 
           if(act === "thanks"){
-            const box = document.getElementById(`thBox_${aid}`);
-            if(box) box.style.display = (box.style.display==="none" ? "block" : "none");
-            return;
-          }
+  const box = document.getElementById(`thBox_${aid}`);
+  if(box){
+    const next = (box.style.display==="none" ? "block" : "none");
+    box.style.display = next;
+
+    // 既にお礼があるなら textarea に入れる（空のときだけ）
+    if(next === "block"){
+      const ta = document.getElementById(`thTa_${aid}`);
+      if(ta && !ta.value){
+        ta.value = (d.thanksText || "");
+      }
+    }
+  }
+  return;
+}
+
 
           if(act === "thanksCancel"){
             const box = document.getElementById(`thBox_${aid}`);
