@@ -171,12 +171,12 @@ export async function createQuestion(payload){
 }
 
 export async function listQuestions(){
-// ===== 質問 =====
+// ===== 質問一覧（キャッシュ付き / export無しでも動く）=====
 let _questionsCache = null;
 let _questionsCacheAt = 0;
-const QUESTIONS_CACHE_MS = 60 * 1000; // 60秒キャッシュ
+const QUESTIONS_CACHE_MS = 60 * 1000;
 
-async function _listQuestions({ force=false } = {}){
+async function listQuestions({ force=false, limitN=200 } = {}){
   await ensureAnonAuth();
 
   const now = Date.now();
@@ -184,16 +184,29 @@ async function _listQuestions({ force=false } = {}){
     return _questionsCache;
   }
 
-  const qy = query(collection(db, "questions"), orderBy("createdAt", "desc"));
-  const snap = await getDocs(qy);
+  // インデックス要らない版（まず動作優先）
+  const qy = query(
+    collection(db, "questions"),
+    orderBy("createdAt", "desc"),
+    limit(limitN)
+  );
 
+  const snap = await getDocs(qy);
   const out = [];
-  snap.forEach(d => out.push({ id:d.id, data:d.data() }));
+  snap.forEach(d => {
+    const data = d.data();
+    if(data?.deleted) return; // クライアント側で除外
+    out.push({ id:d.id, data });
+  });
 
   _questionsCache = out;
   _questionsCacheAt = now;
   return out;
 }
+
+// export が死ぬ環境向け：windowに公開
+window.listQuestions = listQuestions;
+
 
 }
 export async function getQuestion(qid){
