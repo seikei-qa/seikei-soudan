@@ -397,19 +397,15 @@
     }
 
     async function loadAll(){
-      const res = await listQuestions();
-      all = res.filter(q => !q.data?.deleted);
+  const res = await listQuestions();
+  const rows = Array.isArray(res) ? res : [];
+  all = rows.filter(q => !q.data?.deleted);
 
-      // 上部3BOXは全体から作る（一覧の絞り込みとは独立）
-      renderTopBoxes();
-
-      // 初期表示：1ページ目
-      currentPage = 1;
-      renderList();
-
-      // 通知
-      loadNoti();
-    }
+  renderTopBoxes();
+  currentPage = 1;
+  renderList();
+  loadNoti();
+}
 
     window.addEventListener("DOMContentLoaded", ()=>{
       loadAll();
