@@ -170,13 +170,12 @@ export async function createQuestion(payload){
   return addDoc(collection(db, "questions"), payload);
 }
 
-export async function listQuestions(){
 // ===== 質問取得 =====
 let _questionsCache = null;
 let _questionsCacheAt = 0;
 const QUESTIONS_CACHE_MS = 60 * 1000;
 
-async function _listQuestions({ force=false } = {}){
+export async function listQuestions({ force=false } = {}){
   await ensureAnonAuth();
 
   const now = Date.now();
@@ -194,9 +193,7 @@ async function _listQuestions({ force=false } = {}){
   _questionsCacheAt = now;
   return out;
 }
-}
-// ★これ絶対必要
-export { _listQuestions as listQuestions };
+
 
 export async function getQuestion(qid){
   await ensureAnonAuth();
