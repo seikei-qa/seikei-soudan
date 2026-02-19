@@ -1,29 +1,83 @@
 <!doctype html>
-<html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Export</title>
+  <style>
+    body{font-family:system-ui;margin:16px}
+    button{padding:10px 14px;border-radius:10px;border:1px solid #ddd;background:#111;color:#fff;cursor:pointer}
+    pre{background:#f6f7fb;border:1px solid #e6e8ef;border-radius:12px;padding:12px;white-space:pre-wrap}
+    a{display:inline-block;margin-top:10px}
+  </style>
+</head>
 <body>
-<button onclick="run()">JSON書き出し</button>
+  <button id="btn" type="button">JSON書き出し</button>
+  <div id="status" style="margin-top:12px"></div>
+  <div id="linkBox"></div>
+  <pre id="log" style="margin-top:12px;display:none"></pre>
 
 <script type="module">
-import { listQuestions } from "./app.js";
+  const status = document.getElementById("status");
+  const linkBox = document.getElementById("linkBox");
+  const log = document.getElementById("log");
+  const btn = document.getElementById("btn");
 
-async function run(){
-  const list = await listQuestions();
-  const data = list.map(x=>({
-    id:x.id,
-    title:x.data.title,
-    body:x.data.body
-  }));
+  function setStatus(t){ status.textContent = t; }
+  function showLog(obj){
+    log.style.display = "block";
+    log.textContent = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
+  }
 
-  const blob = new Blob(
-    [JSON.stringify(data,null,2)],
-    {type:"application/json"}
-  );
+  btn.addEventListener("click", async ()=>{
+    setStatus("準備中…（Firestoreに接続しています）");
+    linkBox.innerHTML = "";
+    log.style.display = "none";
+    log.textContent = "";
 
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "questions.json";
-  a.click();
-}
+    try{
+      const mod = await import("./app.js");
+      if(!mod.listQuestions) throw new Error("app.jsに listQuestions が見つかりません");
+
+      setStatus("質問を取得中…");
+      const list = await mod.listQuestions({ force:true });
+      const rows = Array.isArray(list) ? list : [];
+
+      setStatus(`取得完了：${rows.length}件 / JSON生成中…`);
+
+      const data = rows
+        .filter(x => !(x.data || {}).deleted)
+        .map(x => ({
+          id: x.id,
+          title: (x.data?.title || "").slice(0, 200),
+          body: (x.data?.body || "").slice(0, 5000)
+        }));
+
+      const json = JSON.stringify(data, null, 2);
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+
+      // 自動DL（ダメでもリンクを出す）
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "questions.json";
+      a.textContent = "questions.json をダウンロード";
+      a.style.fontWeight = "700";
+      linkBox.appendChild(a);
+
+      // ここがブロックされてもリンクは残る
+      a.click();
+
+      setStatus("完了：リンクが出ていればそこからダウンロードできます。");
+      // うまく行かない人用に中身も表示
+      showLog(data.slice(0, 5)); // 先頭5件だけログ表示
+    }catch(e){
+      console.error(e);
+      setStatus("失敗：エラー内容を表示します（下）。");
+      showLog(String(e?.message || e));
+      alert("エラーが出ています。画面下の内容を送ってください。");
+    }
+  });
 </script>
 </body>
 </html>
