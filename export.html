@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+<body>
+<button onclick="run()">JSON書き出し</button>
+
+<script type="module">
+import { listQuestions } from "./app.js";
+
+async function run(){
+  const list = await listQuestions();
+  const data = list.map(x=>({
+    id:x.id,
+    title:x.data.title,
+    body:x.data.body
+  }));
+
+  const blob = new Blob(
+    [JSON.stringify(data,null,2)],
+    {type:"application/json"}
+  );
+
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "questions.json";
+  a.click();
+}
+</script>
+</body>
+</html>
