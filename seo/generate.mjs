@@ -38,6 +38,19 @@ function pageHtml({ id, title, body }){
 <meta property="og:url" content="${url}">
 <meta property="og:type" content="article">
 </head>
+<script>
+  // 人間が開いたら0.2秒で質問UIへ
+  setTimeout(() => {
+    location.replace("/seikei-soudan/q.html?id=__ID__");
+  }, 200);
+</script>
+
+<noscript>
+  <p>
+    JavaScriptが無効です：
+    <a href="/seikei-soudan/q.html?id=__ID__">質問ページを開く</a>
+  </p>
+</noscript>
 <body>
 <main style="max-width:900px;margin:24px auto;padding:0 14px;font-family:system-ui,-apple-system,Segoe UI,Roboto,'Noto Sans JP',sans-serif;">
   <h1 style="font-size:20px;line-height:1.3;">${escHtml(t)}</h1>
